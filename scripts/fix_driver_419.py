@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+"""4.19 适配：修补官方 SukiSU builtin 线驱动在 4.19 内核上编译不过的几处。
+
+用法: fix_driver_419.py <驱动根目录>          （驱动根目录下应有 kernel/ 子目录）
+
+每一处都是确定性的精确替换 + 自检；任何一处没生效都会以非 0 退出。
+"""
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1] if len(sys.argv) > 1 else "KernelSU").resolve()
+K = root / "kernel"
+
+
+def read(p: Path) -> str:
+    return p.read_text(encoding="utf-8", errors="surrogateescape")
+
+
+def write(p: Path, s: str) -> None:
+    p.write_text(s, encoding="utf-8", errors="surrogateescape")
+
+
+report: list[str] = []
+
+# 1) include/uapi/feature.h
+#    KSU_FEATURE_SELINUX_HIDE 被 "#if LINUX_VERSION_CODE >= 5.10" 包着，
+#    但 policy/feature.c 无条件引用它 → 4.19 上枚举缺项、编译失败。去掉 guard。
+p = K / "include" / "uapi" / "feature.h"
+OLD1 = ("#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)\n"
+        "    KSU_FEATURE_SELINUX_HIDE = 4,\n"
+        "#endif\n")
+if p.is_file():
+    s = read(p)
+    if OLD1 in s:
+        s = s.replace(
+            OLD1,
+            "    KSU_FEATURE_SELINUX_HIDE = 4, /* KSU-A52: 去掉 >=5.10 guard（feature.c 无条件引用） */\n",
+        )
+        write(p, s)
+        report.append("[+] feature.h: KSU_FEATURE_SELINUX_HIDE 已解除 guard")
+    else:
+        report.append("[=] feature.h: 无需修改")
+else:
+    report.append("[!] 找不到 feature.h")
+    report.append("[-] include/uapi/feature.h 缺失")
+    print("\n".join(report))
+    sys.exit(1)
+
+# 2) kernel/kernel_includes.h —— 补 4.19 没有的 fallthrough 宏（5.x 才在 compiler_attributes.h）
+p = K / "kernel_includes.h"
+if p.is_file():
+    s = read(p)
+    if "KSU-A52 fallthrough compat" not in s:
+        s += (
+            "\n/* KSU-A52 fallthrough compat: 4.19 没有 fallthrough 宏（5.x 才有） */\n"
+            "#ifndef fallthrough\n"
+            "#define fallthrough do { } while (0)\n"
+            "#endif\n"
+        )
+        write(p, s)
+        report.append("[+] kernel_includes.h: 已补 fallthrough")
+    else:
+        report.append("[=] kernel_includes.h: fallthrough 已存在")
+else:
+    report.append("[!] 找不到 kernel_includes.h")
+    print("\n".join(report))
+    sys.exit(1)
+
+# 3) kernel/extension/cpu_spoof.c —— struct clocksource::vdso_clock_mode 是 5.3 才加的字段
+p = K / "extension" / "cpu_spoof.c"
+if p.is_file():
+    s = read(p)
+    OLD3 = ("                        (*curr_cs_ptr)->vdso_clock_mode =\n"
+            "                            VDSO_CLOCKMODE_ARCHTIMER;\n")
+    hit = s.find(OLD3)
+    if hit == -1:
+        report.append("[=] cpu_spoof.c: 无需修改（或已处理）")
+    elif "#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)" in s[max(0, hit - 220):hit]:
+        report.append("[=] cpu_spoof.c: guard 已存在（幂等）")
+    else:
+        s = s.replace(
+            OLD3,
+            "#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)\n" + OLD3 + "#endif\n",
+            1,
+        )
+        write(p, s)
+        report.append("[+] cpu_spoof.c: vdso_clock_mode 赋值已加 >=5.3 guard")
+else:
+    report.append("[=] 没有 extension/cpu_spoof.c，跳过")
+
+# 4) kernel/sulog/event.c —— 非 SUSFS 分支里 user_arg_null_ptr() 返回指针，
+#    但 ksu_sulog_capture() 的形参是结构体值 → 改成返回值。
+p = K / "sulog" / "event.c"
+if p.is_file():
+    s = read(p)
+    changed = False
+    if "static inline struct user_arg_ptr *user_arg_null_ptr(void)" in s:
+        s = s.replace(
+            "static inline struct user_arg_ptr *user_arg_null_ptr(void)",
+            "static inline struct user_arg_ptr user_arg_null_ptr(void) /* KSU-A52: 返回结构体值 */",
+        )
+        # 函数体里还指针解引用，直接按字面量改（该字符串在非 SUSFS 分支里唯一）
+        if "return &null_arg;" in s:
+            s = s.replace("return &null_arg;", "return null_arg;")
+        changed = True
+    if changed:
+        write(p, s)
+        report.append("[+] event.c: user_arg_null_ptr 已改为返回值")
+    else:
+        report.append("[=] event.c: 无需修改")
+else:
+    report.append("[=] 没有 sulog/event.c，跳过")
+
+# 5) kernel/extension/kpm/kpm.c —— 5.x 的 access_ok(addr, size) 是 2 参数；
+#    4.19 是 access_ok(type, addr, size)。arm64 的 4.19 根本不看 type，VERIFY_READ 完全安全。
+p = K / "extension" / "kpm" / "kpm.c"
+if p.is_file():
+    s = read(p)
+    n = len(re.findall(r"access_ok\((?!VERIFY_)", s))
+    if n:
+        s = re.sub(r"access_ok\((?!VERIFY_)", "access_ok(VERIFY_READ, ", s)
+        write(p, s)
+        report.append(f"[+] kpm.c: {n} 处 access_ok 已补 VERIFY_READ")
+    else:
+        report.append("[=] kpm.c: access_ok 无需修改")
+else:
+    report.append("[=] 没有 extension/kpm/kpm.c，跳过")
+
+# 6) kernel/runtime/ksud.c —— selinux_hide 的【实现】被 >=5.10 的 guard 排除，
+#    但这里的【调用】是无条件的 → 4.19 链接时报 undefined reference。
+#    用同一个 guard 把调用包起来（保持缩进，幂等）。
+p = K / "runtime" / "ksud.c"
+if p.is_file():
+    s = read(p)
+    if "KSU-A52 selinux_hide guard" in s:
+        report.append("[=] ksud.c: selinux_hide 调用已有 guard（幂等）")
+    else:
+        pat = re.compile(r"(?m)^([ \t]*)(ksu_selinux_hide_[a-z_]+\(\);)")
+        n = len(pat.findall(s))
+        if n:
+            s = pat.sub(
+                lambda m: ("#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0) /* KSU-A52 selinux_hide guard */\n"
+                           f"{m.group(1)}{m.group(2)}\n#endif"),
+                s,
+            )
+            write(p, s)
+            report.append(f"[+] ksud.c: {n} 处 selinux_hide 调用已加 >=5.10 guard")
+        else:
+            report.append("[=] ksud.c: 未找到 selinux_hide 调用")
+else:
+    report.append("[=] 没有 runtime/ksud.c，跳过")
+
+# 7) fs/exec.c —— 【实机崩溃点】官方 4.19 钩子补丁插入的 else 分支把 argv/envp/flags 传成 NULL，
+#    而 builtin 驱动的 ksu_handle_execveat_sucompat 会解引用 argv。
+#    开机时 ksu_execveat_hook 尚为 false，于是每次 execve 都走这一分支 →
+#    第一次 execve 就 NULL 解引用 → Kernel panic。
+#    实测崩溃栈：pc : ksu_handle_execveat_sucompat+0xd0 ; lr : ...+0x84 ; do_execve+0x50。
+#    修法：把真实的 &argv/&envp 传进去；32 位那条分支（su 是 64 位，用不到）直接不启用。
+pe = None
+for cand in (K.parent.parent / "fs" / "exec.c", K.parent / "fs" / "exec.c"):
+    if cand.is_file():
+        pe = cand
+        break
+if pe is None:
+    pe = K.parent.parent / "fs" / "exec.c"
+    report.append(f"[!] 找不到 fs/exec.c（试过 {pe}）—— 钩子补丁是否已应用？")
+if pe.is_file():
+    se = read(pe)
+    before = se
+    # 先处理 32 位 compat 那一行（注释掉整条调用；其 argv 类型不同，不能照搬 &argv）
+    se = se.replace(
+        "\t\tksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL); /* 32-bit su */",
+        "\t\t/* KSU-A52: 32 位 su 路径原样传 NULL 会 panic，这里不启用 */",
+    )
+    # 再处理 64 位 do_execve 路径：传真实 argv/envp
+    se = se.replace(
+        "ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL);",
+        "ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, &argv, &envp, 0); /* KSU-A52: 原来传 NULL 会 panic */",
+    )
+    if se != before:
+        write(pe, se)
+        left = se.count("sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL)")
+        report.append(f"[+] fs/exec.c: sucompat 的 NULL 传参已修复（残留 NULL 调用 {left} 处）")
+    else:
+        report.append("[=] fs/exec.c: 未找到 sucompat NULL 调用（或已修复）")
+else:
+    report.append("[!] 找不到 fs/exec.c（钩子补丁是否已应用？）")
+
+print("\n".join(report))
+
+# ---- 自检 ----
+ok = True
+if OLD1 in read(K / "include" / "uapi" / "feature.h"):
+    ok = False
+    print("[!] feature.h 的 guard 仍然存在")
+if "KSU-A52 fallthrough compat" not in read(K / "kernel_includes.h"):
+    ok = False
+    print("[!] fallthrough 未补上")
+cp = K / "extension" / "cpu_spoof.c"
+if cp.is_file():
+    sc = read(cp)
+    hit = sc.find("vdso_clock_mode =")
+    if hit != -1 and "#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)" not in sc[max(0, hit - 200):hit]:
+        ok = False
+        print("[!] cpu_spoof.c 的 guard 未生效")
+ev = K / "sulog" / "event.c"
+if ev.is_file():
+    se = read(ev)
+    if "static inline struct user_arg_ptr *user_arg_null_ptr(void)" in se:
+        ok = False
+        print("[!] event.c 签名未修改")
+    if "return &null_arg;" in se:
+        ok = False
+        print("[!] event.c 函数体仍返回指针")
+kp = K / "extension" / "kpm" / "kpm.c"
+if kp.is_file() and re.search(r"access_ok\((?!VERIFY_)", read(kp)):
+    ok = False
+    print("[!] kpm.c 仍有 2 参数 access_ok")
+ks = K / "runtime" / "ksud.c"
+if ks.is_file():
+    sk = read(ks)
+    if re.search(r"(?m)^[ \t]*ksu_selinux_hide_[a-z_]+\(\);", sk) and "KSU-A52 selinux_hide guard" not in sk:
+        ok = False
+        print("[!] ksud.c 的 selinux_hide 调用未加 guard")
+# 【最关键的一条】fs/exec.c 里绝不能剩下传 NULL 的 sucompat 调用
+if pe.is_file():
+    sfin = read(pe)
+    if "sucompat((int *)AT_FDCWD, &filename, NULL, NULL, NULL)" in sfin:
+        ok = False
+        print("[!] 致命：fs/exec.c 里仍有 sucompat(..., NULL, NULL, NULL) —— 会 NULL 解引用 panic")
+    elif "KSU-A52: 原来传 NULL 会 panic" not in sfin:
+        ok = False
+        print("[!] fs/exec.c 的 sucompat 修复未生效")
+print("[OK] 驱动 4.19 适配检查通过" if ok else "[!] 有改动未生效")
+sys.exit(0 if ok else 1)

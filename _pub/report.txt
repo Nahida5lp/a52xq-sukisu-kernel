@@ -1,0 +1,30 @@
+=== publish 自查报告 Sat Oct 24 05:55:13 UTC 2026 ===
+--- README/LICENSE 大小 ---
+ 8860 README.md
+18093 LICENSE
+26953 total
+--- scripts / patches ---
+patches:
+total 8
+-rw-r--r-- 1 runner runner 4740 Oct 24 05:55 ksu_hooks_sukisu_4.19.patch
+
+scripts:
+total 76
+-rwxr-xr-x 1 runner runner 45345 Oct 24 05:55 build_builtin.sh
+-rw-r--r-- 1 runner runner  9827 Oct 24 05:55 fix_driver_419.py
+-rw-r--r-- 1 runner runner  8430 Oct 24 05:55 fix_sources_for_419.py
+-rw-r--r-- 1 runner runner  4080 Oct 24 05:55 strip_legacy_ksu_hooks.py
+--- 工作流 ---
+build.yml
+--- 仓库文件 ---
+./.github/workflows/build.yml
+./LICENSE
+./README.md
+./_pub/report.txt
+./patches/ksu_hooks_sukisu_4.19.patch
+./scripts/build_builtin.sh
+./scripts/fix_driver_419.py
+./scripts/fix_sources_for_419.py
+./scripts/strip_legacy_ksu_hooks.py
+--- Release ---
+A52xq SukiSU Ultra 内核（builtin 线 · UAPI 6）	Latest	kbuild-1024-055510	2026-10-24T05:55:13Z
