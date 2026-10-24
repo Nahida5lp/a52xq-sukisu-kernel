@@ -1,0 +1,25 @@
+--- 关键错误扫描 ---
+--- fs/exec.c sucompat（必须无 NULL 传参） ---
+1926:extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
+1940:		ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, &argv, &envp, 0); /* KSU-A52: 原来传 NULL 会 panic */
+--- build.log 尾部 ---
+FIPS integrity procedure has been finished for crypto
+  OBJCOPY arch/arm64/boot/Image
+  Building modules, stage 2.
+  MODPOST 7 modules
+  CC      drivers/char/rdbg.mod.o
+  CC      drivers/media/platform/msm/dvb/adapter/mpq-adapter.mod.o
+  CC      drivers/media/platform/msm/dvb/demux/mpq-dmx-hw-plugin.mod.o
+  CC      drivers/mmc/core/mmc_test.mod.o
+  CC      drivers/soc/qcom/llcc_perfmon.mod.o
+  CC      net/ipv4/tcp_htcp.mod.o
+  CC      net/ipv4/tcp_westwood.mod.o
+  LD [M]  drivers/char/rdbg.ko
+  LD [M]  drivers/media/platform/msm/dvb/adapter/mpq-adapter.ko
+  LD [M]  drivers/media/platform/msm/dvb/demux/mpq-dmx-hw-plugin.ko
+  LD [M]  drivers/mmc/core/mmc_test.ko
+  LD [M]  net/ipv4/tcp_westwood.ko
+  LD [M]  drivers/soc/qcom/llcc_perfmon.ko
+  LD [M]  net/ipv4/tcp_htcp.ko
+make[1]: Leaving directory '/home/runner/a52xq-build/kernel/out'
+make: Leaving directory '/home/runner/a52xq-build/kernel'
