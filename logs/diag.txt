@@ -1,5 +1,8 @@
 --- 关键错误扫描 ---
---- fs/exec.c sucompat（必须无 NULL 传参） ---
+--- reboot.c 挂钩检查（必须出现） ---
+318:		extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
+321:		if (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg))
+--- fs/exec.c sucompat 检查（必须非 NULL） ---
 1926:extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 1940:		ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, &argv, &envp, 0); /* KSU-A52: 原来传 NULL 会 panic */
 --- build.log 尾部 ---
