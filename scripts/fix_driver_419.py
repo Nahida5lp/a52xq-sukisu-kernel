@@ -187,6 +187,43 @@ if pe.is_file():
 else:
     report.append("[!] 找不到 fs/exec.c（钩子补丁是否已应用？）")
 
+# 8) kernel/reboot.c —— 【内核 API 通道的唯一缺口】
+#    驱动的 supercall 是"匿名 fd 上的 ioctl"（supercall/supercall.c: anon_ksu_ioctl）。
+#    ksud 要拿到这个 fd，必须走 reboot(KSU_INSTALL_MAGIC1, KSU_INSTALL_MAGIC2, ...) 通道：
+#        int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg)
+#        -> magic2 == KSU_INSTALL_MAGIC2 时调用 ksu_handle_fd_request() 安装 fd
+#    该函数在驱动里存在、符号也已导出，但 4.19 钩子补丁【没有】在 kernel/reboot.c 里调用它。
+#    后果：ksud debug info 的 version/uapi_version/features 全为 0，
+#          Zygisk Next 靠这条通道探测 Root → root_impl: 0 → module.prop 写成 [Root: ❌None]。
+pb = K.parent.parent / "kernel" / "reboot.c"
+if pb.is_file():
+    sb = read(pb)
+    if "KSU-A52 sys_reboot hook" in sb:
+        report.append("[=] reboot.c: sys_reboot 挂钩已存在（幂等）")
+    else:
+        idx = sb.find("SYSCALL_DEFINE4(reboot")
+        brace = sb.find("\n{\n", idx) if idx != -1 else -1
+        if idx != -1 and brace != -1:
+            ins = brace + len("\n{\n")
+            hook = (
+                "#ifdef CONFIG_KSU\n"
+                "\t{\n"
+                "\t\textern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,\n"
+                "\t\t\t\t\t\t    void __user **arg);\n"
+                "\t\t/* KSU-A52 sys_reboot hook: 打通 ksud 获取 supercall fd 的通道 */\n"
+                "\t\tif (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg))\n"
+                "\t\t\treturn 0;\n"
+                "\t}\n"
+                "#endif\n"
+            )
+            sb = sb[:ins] + hook + sb[ins:]
+            write(pb, sb)
+            report.append("[+] reboot.c: 已插入 ksu_handle_sys_reboot 挂钩（打通 userspace API）")
+        else:
+            report.append("[!] reboot.c: 未找到 SYSCALL_DEFINE4(reboot) 锚点 —— 需人工确认")
+else:
+    report.append("[!] 找不到 kernel/reboot.c")
+
 print("\n".join(report))
 
 # ---- 自检 ----
@@ -232,5 +269,17 @@ if pe.is_file():
     elif "KSU-A52: 原来传 NULL 会 panic" not in sfin:
         ok = False
         print("[!] fs/exec.c 的 sucompat 修复未生效")
+# 【内核 API 通道】reboot.c 必须调用 ksu_handle_sys_reboot，否则 ksud/znctl 全部查询返回 0
+if pb.is_file():
+    srb = read(pb)
+    if "KSU-A52 sys_reboot hook" not in srb:
+        ok = False
+        print("[!] 致命：kernel/reboot.c 缺少 ksu_handle_sys_reboot 挂钩 —— 内核 API 会全部返回 0")
+    elif "ksu_handle_sys_reboot(magic1, magic2, cmd, &arg)" not in srb:
+        ok = False
+        print("[!] reboot.c 的挂钩形式不对")
+else:
+    ok = False
+    print("[!] 找不到 kernel/reboot.c")
 print("[OK] 驱动 4.19 适配检查通过" if ok else "[!] 有改动未生效")
 sys.exit(0 if ok else 1)
