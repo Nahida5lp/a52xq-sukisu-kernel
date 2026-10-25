@@ -1,14 +1,12 @@
 --- 关键错误扫描 ---
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/preinit/runner/nolibc/sys.h:360:20: error: variable has incomplete type 'struct clone_args'
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/preinit/runner/nolibc/sys.h:365:21: error: use of undeclared identifier '__NR_clone3'
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/preinit/runner/nolibc/sys.h:354:21: error: use of undeclared identifier '__NR_vfork'; did you mean 'sys_vfork'?
 /home/runner/a52xq-build/out/build.log:../drivers/kernelsu/preinit/runner/nolibc/sys/mount.h:15:10: fatal error: 'linux/mount.h' file not found
 /home/runner/a52xq-build/out/build.log:clang-11: error: assembler command failed with exit code 1 (use -v to see invocation)
 /home/runner/a52xq-build/out/build.log:make[3]: *** [../scripts/Makefile.build:438: drivers/kernelsu/preinit/blob.o] Error 1
 /home/runner/a52xq-build/out/build.log:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
 /home/runner/a52xq-build/out/build.log:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
 /home/runner/a52xq-build/out/build.log:make: *** [Makefile:146: sub-make] Error 2
-/home/runner/out.txt:../drivers/kernelsu/preinit/runner/nolibc/sys.h:360:20: error: variable has incomplete type 'struct clone_args'
-/home/runner/out.txt:../drivers/kernelsu/preinit/runner/nolibc/sys.h:365:21: error: use of undeclared identifier '__NR_clone3'
+/home/runner/out.txt:../drivers/kernelsu/preinit/runner/nolibc/sys.h:354:21: error: use of undeclared identifier '__NR_vfork'; did you mean 'sys_vfork'?
 /home/runner/out.txt:../drivers/kernelsu/preinit/runner/nolibc/sys/mount.h:15:10: fatal error: 'linux/mount.h' file not found
 /home/runner/out.txt:clang-11: error: assembler command failed with exit code 1 (use -v to see invocation)
 /home/runner/out.txt:make[3]: *** [../scripts/Makefile.build:438: drivers/kernelsu/preinit/blob.o] Error 1
