@@ -21,8 +21,8 @@ FIPS integrity procedure has been finished for crypto
   LD [M]  drivers/media/platform/msm/dvb/adapter/mpq-adapter.ko
   LD [M]  drivers/media/platform/msm/dvb/demux/mpq-dmx-hw-plugin.ko
   LD [M]  drivers/mmc/core/mmc_test.ko
+  LD [M]  drivers/soc/qcom/llcc_perfmon.ko
   LD [M]  net/ipv4/tcp_htcp.ko
   LD [M]  net/ipv4/tcp_westwood.ko
-  LD [M]  drivers/soc/qcom/llcc_perfmon.ko
 make[1]: Leaving directory '/home/runner/a52xq-build/kernel/out'
 make: Leaving directory '/home/runner/a52xq-build/kernel'
