@@ -116,8 +116,20 @@ if grep -q 'KSU_VERSION' KernelSU/kernel/Kbuild; then
 fi
 sed -i 's/-j16/-j$(nproc) -k/' build_kernel.sh
 sed -i 's/^mkdir out$/mkdir -p out/' build_kernel.sh
+# 【关键】preinit / initrc 集成：驱动 Makefile 在解析阶段就检查 $(objtree)/usr/include，
+# 若不存在就定义 -DKSU_NO_PREINIT，关闭 preinit → 模块 post-fs-data/service 阶段由用户空间
+# "跑完即回收"执行 → Zygisk Next 的 zygiskd 无法常驻（Root 探测虽通但 Zygisk 不工作）。
+# 这里在主 make 之前先跑一次 headers_install 把它生成出来。
+if ! grep -q 'headers_install' build_kernel.sh; then
+  sed -i '0,/^[[:space:]]*make /{s//make -j$(nproc) ARCH=arm64 O=out headers_install INSTALL_HDR_PATH="$PWD\/out\/usr" >\/dev\/null 2>\&1 || true\n&/}' build_kernel.sh
+  echo "--- 已注入 headers_install（preinit 前置步骤） ---"
+  grep -n -m2 'headers_install\|^[[:space:]]*make ' build_kernel.sh
+fi
 bash build_kernel.sh 2>&1 | tee "$W/out/build.log"
 ls -l out/arch/arm64/boot/Image
+echo "--- preinit 是否启用（不应再出现 KSU_NO_PREINIT / 'preinit disabled'） ---"
+grep -m3 -E 'preinit|KSU_NO_PREINIT' "$W/out/build.log" || echo "  (无 preinit 相关告警 ✓)"
+ls -ld out/usr/include 2>/dev/null || echo "  [!] out/usr/include 仍不存在"
 grep -E '^CONFIG_(KSU|KSU_MANUAL_HOOK|KPROBES|KALLSYMS)' out/.config
 # 硬断言：KPROBES 必须关闭（否则三星 RKP 会 panic、开机黑屏重启）
 if grep -qE '^CONFIG_(KPROBES|KRETPROBES)=y' out/.config; then
