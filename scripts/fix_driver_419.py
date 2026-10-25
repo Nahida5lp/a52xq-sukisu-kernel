@@ -224,6 +224,31 @@ if pb.is_file():
 else:
     report.append("[!] 找不到 kernel/reboot.c")
 
+# 9) preinit runner —— 4.19 的 uapi 没有 struct clone_args（5.3+ 才有），
+#    nolibc/sys.h 里 sys_vfork() 的 clone3 回退分支因此编译失败：
+#        error: variable has incomplete type 'struct clone_args'
+#    arm64 本身有 __NR_vfork（= 58），不该走 clone3 分支。
+#    让 arm64 明确走 vfork 分支即可绕开 clone_args/clone3。
+#    preinit 必须能编出来，否则模块 post-fs-data/service 阶段会被"跑完即回收"，
+#    Zygisk Next 的 zygiskd 无法常驻。
+pns = K / "preinit" / "runner" / "nolibc" / "sys.h"
+if pns.is_file():
+    sns = read(pns)
+    if "KSU-A52 vfork for arm64" in sns:
+        report.append("[=] nolibc/sys.h: arm64 vfork 分支已处理（幂等）")
+    elif "#if defined(__NR_vfork)\n" in sns:
+        sns = sns.replace(
+            "#if defined(__NR_vfork)\n",
+            "#if defined(__NR_vfork) || defined(__aarch64__) /* KSU-A52 vfork for arm64 */\n",
+            1,
+        )
+        write(pns, sns)
+        report.append("[+] nolibc/sys.h: arm64 走 vfork 分支（绕开 clone_args/clone3）")
+    else:
+        report.append("[!] nolibc/sys.h: 未找到 __NR_vfork 锚点")
+else:
+    report.append("[=] 没有 preinit/runner/nolibc/sys.h，跳过")
+
 print("\n".join(report))
 
 # ---- 自检 ----
@@ -281,5 +306,8 @@ if pb.is_file():
 else:
     ok = False
     print("[!] 找不到 kernel/reboot.c")
+if pns.is_file() and "KSU-A52 vfork for arm64" not in read(pns):
+    ok = False
+    print("[!] 致命：preinit runner 的 arm64 vfork 分支未处理（4.19 会因 clone_args 编译失败）")
 print("[OK] 驱动 4.19 适配检查通过" if ok else "[!] 有改动未生效")
 sys.exit(0 if ok else 1)
