@@ -116,21 +116,65 @@ if grep -q 'KSU_VERSION' KernelSU/kernel/Kbuild; then
 fi
 sed -i 's/-j16/-j$(nproc) -k/' build_kernel.sh
 sed -i 's/^mkdir out$/mkdir -p out/' build_kernel.sh
-# 【关键】preinit / initrc 集成：驱动 Makefile 在解析阶段就检查 $(objtree)/usr/include，
-# 若不存在就定义 -DKSU_NO_PREINIT，关闭 preinit → 模块 post-fs-data/service 阶段由用户空间
-# "跑完即回收"执行 → Zygisk Next 的 zygiskd 无法常驻（Root 探测虽通但 Zygisk 不工作）。
-# 这里在主 make 之前先跑一次 headers_install 把它生成出来。
-if ! grep -q 'headers_install' build_kernel.sh; then
-  sed -i '0,/^[[:space:]]*make /{s//make -j$(nproc) ARCH=arm64 O=out headers_install INSTALL_HDR_PATH="$PWD\/out\/usr" >\/dev\/null 2>\&1 || true\n&/}' build_kernel.sh
-  echo "--- 已注入 headers_install（preinit 前置步骤） ---"
-  grep -n -m2 'headers_install\|^[[:space:]]*make ' build_kernel.sh
+
+# 【隐蔽性】抹掉构建环境痕迹。
+# /proc/version 会原样暴露 KBUILD_BUILD_USER@KBUILD_BUILD_HOST，
+# 用 GitHub Actions 编译时就是 `runner@runnervm8k3b6` —— 一眼就能看出是云端 CI 产物，
+# 是可被检测模块（NativeCheck / Hunter 等）标记的弱信号。
+# 这里改成中性值；如需伪装成特定值，设环境变量 KSU_BUILD_USER / KSU_BUILD_HOST 覆盖。
+export KBUILD_BUILD_USER="${KSU_BUILD_USER:-android}"
+export KBUILD_BUILD_HOST="${KSU_BUILD_HOST:-localhost}"
+echo "--- /proc/version 构建身份: ${KBUILD_BUILD_USER}@${KBUILD_BUILD_HOST} ---"
+
+# 【preinit / initrc 集成】默认【关闭】。
+#
+# 背景：驱动 Makefile 在解析阶段检查 $(objtree)/usr/include，不存在就定义 -DKSU_NO_PREINIT
+# （关闭 preinit）。开着 preinit 时，模块 post-fs-data/service 阶段会由 init 上下文执行，
+# 理论上更"正规"。
+#
+# 但实测结论（2026-10-25）：Zygisk Next 的 zygiskd 不能常驻，真正原因是模块目录里存在
+# `disable` 标记（KernelSU 会完全跳过该模块的脚本），与 preinit 无关。删掉 disable 后
+# 一切正常（zn-daemon / zn-nsdaemon-zygote* 都在跑）。
+#
+# 而开启 preinit 会要求 preinit runner 在 4.19 上能编译，目前有两个已知缺口：
+#   1) nolibc/sys.h 的 __NR_vfork 在 runner 的头文件里未声明
+#   2) nolibc/sys/mount.h 需要 5.x 才有的 <linux/mount.h>
+# 所以这里默认不做 headers_install —— 回到"已验证可成功构建、可正常开机"的配置。
+# 想试验 preinit 时：设 ENABLE_PREINIT=1 即可（失败时会在下面自动回退重试一次）。
+PREINIT_MODE="${ENABLE_PREINIT:-0}"
+if [ "$PREINIT_MODE" = "1" ]; then
+  if ! grep -q 'headers_install' build_kernel.sh; then
+    sed -i '0,/^[[:space:]]*make /{s//make -j$(nproc) ARCH=arm64 O=out headers_install INSTALL_HDR_PATH="$PWD\/out\/usr" >\/dev\/null 2>\&1 || true\n&/}' build_kernel.sh
+    echo "--- 已注入 headers_install（ENABLE_PREINIT=1，preinit 前置步骤） ---"
+  fi
+else
+  echo "--- preinit 保持关闭（默认，已验证的稳定配置）---"
 fi
 bash build_kernel.sh 2>&1 | tee "$W/out/build.log"
+# 兜底：万一 preinit 路线把构建搞挂，强制 NO_PREINIT 再试一次，保证出包
+if [ "$PREINIT_MODE" = "1" ] && [ ! -f out/arch/arm64/boot/Image ]; then
+  echo "[!] 开启 preinit 的构建失败，强制 KSU_NO_PREINIT 重试一次 ---"
+  sed -i 's/^\(\s*\)ccflags-y += -DKSU_NO_PREINIT/\1ccflags-y += -DKSU_NO_PREINIT/' KernelSU/kernel/Makefile 2>/dev/null || true
+  printf '\n# --- 兜底：强制关闭 preinit ---\nccflags-y += -DKSU_NO_PREINIT\n' >> KernelSU/kernel/Makefile
+  bash build_kernel.sh 2>&1 | tee -a "$W/out/build.log"
+fi
 ls -l out/arch/arm64/boot/Image
-echo "--- preinit 是否启用（不应再出现 KSU_NO_PREINIT / 'preinit disabled'） ---"
+echo "--- /proc/version 泄漏自检（不应出现 runner@runnervm / codespace@ 之类 CI 标识） ---"
+if strings out/arch/arm64/boot/Image 2>/dev/null | grep -m3 -E 'runner@|codespace|runnervm|actions@' ; then
+  echo "[!] 警告：镜像里仍含 CI 构建者标识（见上）—— 隐蔽性不足"
+else
+  echo "[OK] 未发现 CI 构建者标识 ✓"
+fi
+echo "--- preinit 状态（默认关闭；见脚本顶部说明） ---"
 grep -m3 -E 'preinit|KSU_NO_PREINIT' "$W/out/build.log" || echo "  (无 preinit 相关告警 ✓)"
-ls -ld out/usr/include 2>/dev/null || echo "  [!] out/usr/include 仍不存在"
 grep -E '^CONFIG_(KSU|KSU_MANUAL_HOOK|KPROBES|KALLSYMS)' out/.config
+# 硬断言：必须真的产出 Image，否则中止、不打包（避免"假成功"）
+if [ ! -s out/arch/arm64/boot/Image ]; then
+  echo "[!] 致命：out/arch/arm64/boot/Image 不存在或为空 —— 编译失败，中止，不打包"
+  tail -40 "$W/out/build.log"
+  exit 1
+fi
+echo "[OK] Image 已产出：$(stat -c %s out/arch/arm64/boot/Image) 字节"
 # 硬断言：KPROBES 必须关闭（否则三星 RKP 会 panic、开机黑屏重启）
 if grep -qE '^CONFIG_(KPROBES|KRETPROBES)=y' out/.config; then
   echo "[!] 致命：out/.config 里 CONFIG_KPROBES/KRETPROBES=y（会导致三星 RKP panic）—— 中止，不打包"
