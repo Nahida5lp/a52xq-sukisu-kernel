@@ -1,28 +1,60 @@
 --- 关键错误扫描 ---
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:424:19: error: use of undeclared identifier 'SUSFS_MAGIC'
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:430:14: error: use of undeclared identifier 'CMD_SUSFS_ADD_SUS_PATH_LOOP'
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:475:14: error: use of undeclared identifier 'CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING'
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/sulog/event.c:377:73: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'
+/home/runner/a52xq-build/out/build.log:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
+/home/runner/a52xq-build/out/build.log:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
+/home/runner/a52xq-build/out/build.log:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+/home/runner/a52xq-build/out/build.log:make: *** [Makefile:146: sub-make] Error 2
+/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:424:19: error: use of undeclared identifier 'SUSFS_MAGIC'
+/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:430:14: error: use of undeclared identifier 'CMD_SUSFS_ADD_SUS_PATH_LOOP'
+/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:475:14: error: use of undeclared identifier 'CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING'
+/home/runner/out.txt:../drivers/kernelsu/sulog/event.c:377:73: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'
+/home/runner/out.txt:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
+/home/runner/out.txt:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
+/home/runner/out.txt:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+/home/runner/out.txt:make: *** [Makefile:146: sub-make] Error 2
 --- reboot.c 挂钩检查（必须出现） ---
 318:		extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
 321:		if (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg))
 --- fs/exec.c sucompat 检查（必须非 NULL） ---
 1926:extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 1940:		ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, &argv, &envp, 0); /* KSU-A52: 原来传 NULL 会 panic */
+--- SUSFS 落地检查 ---
+17:obj-$(CONFIG_KSU_SUSFS) += susfs.o susfs_compat_419.o
+6
+CONFIG_KSU=y
+CONFIG_KSU_FEATURE_ADBROOT=y
+CONFIG_KSU_SUSFS=y
+CONFIG_KSU_SUSFS_SUS_PATH=y
+CONFIG_KSU_SUSFS_SUS_KSTAT=y
+CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+CONFIG_KSU_SUSFS_ENABLE_LOG=y
+CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+11:#define SUSFS_VERSION "v1.5.5"
+183:/* susfs_init */
+184:void susfs_init(void);
 --- build.log 尾部 ---
-FIPS integrity procedure has been finished for crypto
-  OBJCOPY arch/arm64/boot/Image
-  Building modules, stage 2.
-  MODPOST 7 modules
-  CC      drivers/char/rdbg.mod.o
-  CC      drivers/media/platform/msm/dvb/adapter/mpq-adapter.mod.o
-  CC      drivers/media/platform/msm/dvb/demux/mpq-dmx-hw-plugin.mod.o
-  CC      drivers/mmc/core/mmc_test.mod.o
-  CC      drivers/soc/qcom/llcc_perfmon.mod.o
-  CC      net/ipv4/tcp_htcp.mod.o
-  CC      net/ipv4/tcp_westwood.mod.o
-  LD [M]  drivers/char/rdbg.ko
-  LD [M]  drivers/media/platform/msm/dvb/adapter/mpq-adapter.ko
-  LD [M]  drivers/media/platform/msm/dvb/demux/mpq-dmx-hw-plugin.ko
-  LD [M]  drivers/mmc/core/mmc_test.ko
-  LD [M]  net/ipv4/tcp_htcp.ko
-  LD [M]  drivers/soc/qcom/llcc_perfmon.ko
-  LD [M]  net/ipv4/tcp_westwood.ko
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/core/src/wlan_green_ap_main.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/dispatcher/src/wlan_green_ap_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/dispatcher/src/wlan_green_ap_ucfg_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/target_if/green_ap/src/target_if_green_ap.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_global_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_ucfg_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_main.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_obj_mgr.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_param_handling.o
+  AR      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/built-in.a
+  AR      drivers/net/wireless/built-in.a
+  AR      drivers/net/built-in.a
+make[2]: Target '__build' not remade because of errors.
+make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+make[1]: Target '_all' not remade because of errors.
 make[1]: Leaving directory '/home/runner/a52xq-build/kernel/out'
+make: *** [Makefile:146: sub-make] Error 2
+make: Target '_all' not remade because of errors.
 make: Leaving directory '/home/runner/a52xq-build/kernel'
+cp: cannot stat 'out/arch/arm64/boot/Image': No such file or directory

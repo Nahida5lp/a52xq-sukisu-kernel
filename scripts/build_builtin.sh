@@ -88,6 +88,31 @@ python3 "$W/scripts/fix_driver_419.py" KernelSU || { echo "[!] 驱动/钩子 4.1
 echo "--- fs/exec.c 的 sucompat 调用检查（必须无 NULL 传参） ---"
 grep -n 'sucompat' fs/exec.c || true
 
+echo "=== [6.5/8] SUSFS：内核补丁 + v2 API 兼容层 ==="
+# SUSFS 是 SukiSU 的可选增强：隐藏 sus 挂载/路径、隐藏 ksu 符号、伪装 uname/cmdline、
+# 伪装 AVC 日志。上游 4.19 分支停留在 v1.5.5，而 SukiSU 4.2.1 按 v2.x 接口调用，
+# 故额外补 fs/susfs_compat_419.c 兼容层，并把驱动 dispatch.c 的实参改成 *arg。
+# 兼容层两文件随脚本分发：paste 直取，raw 作为兜底
+fetch() { curl -fsSL --max-time 90 -o "$1" "$2" && return 0; curl -fsSL --max-time 90 -o "$1" "$3"; }
+fetch "$W/scripts/apply_susfs_419.py" "https://paste.c-net.org/NearlyProwess" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/apply_susfs_419.py"
+fetch "$W/scripts/susfs_compat_419.c"  "https://paste.c-net.org/BloatedThinner" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/susfs_compat_419.c"
+SUSFS_DIR="$W/.susfs4ksu"
+rm -rf "$SUSFS_DIR"; mkdir -p "$SUSFS_DIR"
+SUSFS_OK=0
+for URL in \
+  "https://gitlab.com/simonpunk/susfs4ksu/-/archive/kernel-4.19/susfs4ksu-kernel-4.19.tar.gz" \
+  "https://gh-proxy.com/https://gitlab.com/simonpunk/susfs4ksu/-/archive/kernel-4.19/susfs4ksu-kernel-4.19.tar.gz" ; do
+  echo "  下载 $URL"
+  if curl -fsSL --max-time 300 -o "$SUSFS_DIR/s.tar.gz" "$URL"; then SUSFS_OK=1; break; fi
+done
+[ "$SUSFS_OK" = 1 ] || { echo "[!] SUSFS 下载失败"; exit 1; }
+tar xzf "$SUSFS_DIR/s.tar.gz" -C "$SUSFS_DIR" --strip-components=1
+grep -m1 'SUSFS_VERSION "' "$SUSFS_DIR/kernel_patches/include/linux/susfs.h" || true
+python3 "$W/scripts/apply_susfs_419.py" . "$SUSFS_DIR" "$W/scripts" || { echo "[!] SUSFS 补丁应用失败"; exit 1; }
+echo "--- SUSFS 落地检查 ---"
+grep -n 'susfs' fs/Makefile || true
+grep -c 'susfs' security/selinux/avc.c fs/susfs_compat_419.c 2>/dev/null || true
+
 echo "=== [7/8] config + 编译 ==="
 DEF=arch/arm64/configs/a52xq_defconfig
 sed -i -E '/CONFIG_KSU_WITH_KPROBES/d' "$DEF"
@@ -98,7 +123,17 @@ done
 {
   printf '\n# --- SukiSU Ultra builtin line (non-GKI 4.19), UAPI 6 ---\n'
   printf 'CONFIG_KSU=y\n'
-  printf '# CONFIG_KSU_SUSFS is not set\n'      # SUSFS 需要额外的内核补丁，这里不要
+  # SUSFS（需 [6.5/8] 应用内核补丁；SUS_MOUNT / SUS_MAP 不开，见 README）
+  printf 'CONFIG_KSU_SUSFS=y\n'
+  printf 'CONFIG_KSU_SUSFS_SUS_PATH=y\n'
+  printf 'CONFIG_KSU_SUSFS_SUS_KSTAT=y\n'
+  printf 'CONFIG_KSU_SUSFS_SPOOF_UNAME=y\n'
+  printf 'CONFIG_KSU_SUSFS_ENABLE_LOG=y\n'
+  printf 'CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y\n'
+  printf 'CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y\n'
+  printf 'CONFIG_KSU_SUSFS_OPEN_REDIRECT=y\n'
+  printf '# CONFIG_KSU_SUSFS_SUS_MOUNT is not set\n'
+  printf '# CONFIG_KSU_SUSFS_SUS_MAP is not set\n'
   grep -q 'KSU_FEATURE_ADBROOT' KernelSU/kernel/Kconfig 2>/dev/null && printf 'CONFIG_KSU_FEATURE_ADBROOT=y\n' || true
   grep -q 'KSU_MANUAL_HOOK' KernelSU/kernel/Kconfig 2>/dev/null && printf 'CONFIG_KSU_MANUAL_HOOK=y\n' || true
   grep -q 'KSU_MANUAL_SU'   KernelSU/kernel/Kconfig 2>/dev/null && printf 'CONFIG_KSU_MANUAL_SU=y\n'   || true
