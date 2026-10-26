@@ -1,26 +1,41 @@
---- 关键错误扫描 ---
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:424:19: error: use of undeclared identifier 'SUSFS_MAGIC'
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:430:14: error: use of undeclared identifier 'CMD_SUSFS_ADD_SUS_PATH_LOOP'
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:475:14: error: use of undeclared identifier 'CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING'
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/sulog/event.c:377:73: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'
-/home/runner/a52xq-build/out/build.log:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
-/home/runner/a52xq-build/out/build.log:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
-/home/runner/a52xq-build/out/build.log:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
-/home/runner/a52xq-build/out/build.log:make: *** [Makefile:146: sub-make] Error 2
-/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:424:19: error: use of undeclared identifier 'SUSFS_MAGIC'
-/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:430:14: error: use of undeclared identifier 'CMD_SUSFS_ADD_SUS_PATH_LOOP'
-/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:475:14: error: use of undeclared identifier 'CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING'
-/home/runner/out.txt:../drivers/kernelsu/sulog/event.c:377:73: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'
-/home/runner/out.txt:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
-/home/runner/out.txt:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
-/home/runner/out.txt:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+--- BUILD_RC=1 ---
+--- 关键错误扫描（前 60 条） ---
+/home/runner/out.txt:/home/runner/a52xq-build/kernel/out/../drivers/tty/pty.c:734: undefined reference to `ksu_handle_devpts'
+/home/runner/out.txt:/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/adb_root.c:13: undefined reference to `susfs_starts_with'
+/home/runner/out.txt:/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: /home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/adb_root.c:14: undefined reference to `susfs_ends_with'
+/home/runner/out.txt:/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/sulog/event.c:143: undefined reference to `strncpy_from_user_nofault'
+/home/runner/out.txt:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1191: vmlinux] Error 1
 /home/runner/out.txt:make: *** [Makefile:146: sub-make] Error 2
---- reboot.c 挂钩检查（必须出现） ---
-318:		extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
-321:		if (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg))
+/home/runner/a52xq-build/out/build.log:/home/runner/a52xq-build/kernel/out/../drivers/tty/pty.c:734: undefined reference to `ksu_handle_devpts'
+/home/runner/a52xq-build/out/build.log:/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/adb_root.c:13: undefined reference to `susfs_starts_with'
+/home/runner/a52xq-build/out/build.log:/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: /home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/adb_root.c:14: undefined reference to `susfs_ends_with'
+/home/runner/a52xq-build/out/build.log:/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/sulog/event.c:143: undefined reference to `strncpy_from_user_nofault'
+/home/runner/a52xq-build/out/build.log:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1191: vmlinux] Error 1
+/home/runner/a52xq-build/out/build.log:make: *** [Makefile:146: sub-make] Error 2
+--- 本脚本步骤标记 ---
+1:=== [1/8] 写入内嵌文件（官方 4.19 钩子补丁 + 两个适配脚本） ===
+7:=== [2/8] 依赖 ===
+53:=== [3/8] 内核源码（自带 clang-r383902 + GCC 10.3 工具链） ===
+56:=== [4/8] 拉官方 builtin 线驱动（UAPI=6，配官方管理器 v4.2.1-r1 = 41049） ===
+64:=== [5/8] 接入驱动 ===
+70:=== [6/8] 清旧钩子 -> 打官方 4.19 钩子补丁 -> 4.19 适配 ===
+120:=== [6.5/8] SUSFS：内核补丁 + v2 API 兼容层 ===
+208:=== [6.6/8] SELinux 隐藏：4.19 后端 ===
+231:=== [7/8] config + 编译 ===
+--- [6.6/8] SELinux 落地检查结果 ---
+223:--- SELinux 隐藏落地检查 ---
+224-51:		extern struct page *ksu_selinux_fake_status_page(void);
+225-52:		struct page *ksu_fake = ksu_selinux_fake_status_page();
+226-113:#include "feature/selinux_hide_419.c" /* KSU-A52: 4.19 独立实现 */
+227-184:    ksu_selinux_hide_init();
+228---- ksud.c 里 5.10 守卫残留（必须 0） ---
+229-0
 --- fs/exec.c sucompat 检查（必须非 NULL） ---
 1926:extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
 1940:		ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, &argv, &envp, 0); /* KSU-A52: 原来传 NULL 会 panic */
+--- 驱动 include 检查 ---
+/home/runner/a52xq-build/kernel/KernelSU/kernel/ksu_main.c:113:#include "feature/selinux_hide_419.c" /* KSU-A52: 4.19 独立实现 */
+0
 --- SUSFS 落地检查 ---
 17:obj-$(CONFIG_KSU_SUSFS) += susfs.o susfs_compat_419.o
 6
@@ -34,10 +49,15 @@ CONFIG_KSU_SUSFS_ENABLE_LOG=y
 CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
 CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
 CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-11:#define SUSFS_VERSION "v1.5.5"
-183:/* susfs_init */
-184:void susfs_init(void);
---- build.log 尾部 ---
+--- 产物 ---
+total 244
+-rw-r--r-- 1 runner runner 243688 Oct 26 12:11 build.log
+--- build.log 尾部 40 行 ---
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/dispatcher/src/wlan_gpio_tgt_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/dispatcher/src/wlan_gpio_ucfg_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/core/src/wlan_gpio_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/os_if/linux/gpio/src/wlan_cfg80211_gpio.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/target_if/gpio/target_if_gpio.o
   CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/core/src/wlan_green_ap_main.o
   CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/dispatcher/src/wlan_green_ap_api.o
   CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/dispatcher/src/wlan_green_ap_ucfg_api.o
@@ -50,8 +70,23 @@ CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
   AR      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/built-in.a
   AR      drivers/net/wireless/built-in.a
   AR      drivers/net/built-in.a
-make[2]: Target '__build' not remade because of errors.
-make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+  AR      drivers/built-in.a
+  GEN     .version
+  CHK     include/generated/compile.h
+  AR      built-in.a
+  MODPOST vmlinux.o
+WARNING: modpost: Found 1 section mismatch(es).
+To see full details build your kernel with:
+'make CONFIG_DEBUG_SECTION_MISMATCH=y'
+/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: warning: -z norelro ignored
+/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: drivers/tty/pty.o: in function `pts_unix98_lookup':
+/home/runner/a52xq-build/kernel/out/../drivers/tty/pty.c:734: undefined reference to `ksu_handle_devpts'
+/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: drivers/kernelsu/ksu_main.o: in function `is_exec_adbd':
+/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/adb_root.c:13: undefined reference to `susfs_starts_with'
+/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: /home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/adb_root.c:14: undefined reference to `susfs_ends_with'
+/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: drivers/kernelsu/ksu_main.o: in function `ksu_sulog_flatten_argv':
+/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/sulog/event.c:143: undefined reference to `strncpy_from_user_nofault'
+make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1191: vmlinux] Error 1
 make[1]: Target '_all' not remade because of errors.
 make[1]: Leaving directory '/home/runner/a52xq-build/kernel/out'
 make: *** [Makefile:146: sub-make] Error 2
