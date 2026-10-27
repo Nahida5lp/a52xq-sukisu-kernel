@@ -1,0 +1,22 @@
+name: build-kernel
+
+# A52xq SukiSU Ultra 内核构建（SUSFS + SELinux 隐藏）
+# 入口：仓库里的 _pub/entry.sh —— 以后改构建内容只要改那个小文件即可
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 编译并回传日志
+        run: bash _pub/entry.sh
