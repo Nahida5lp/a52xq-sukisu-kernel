@@ -19,4 +19,8 @@ jobs:
           fetch-depth: 0
 
       - name: 编译并回传日志
+        # gh release create 必须拿到 GH_TOKEN，否则 gh 直接报
+        # "To use GitHub CLI in a GitHub Actions workflow, set the GH_TOKEN environment variable"
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash _pub/entry.sh
