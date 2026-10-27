@@ -328,6 +328,63 @@ for rel in ("feature/sucompat.c", "feature/sucompat.h"):
     write(sp, t)
     report.append(f"[+] {rel}: SUSFS 钩子分支已限定为 5.10+（4.19 改走 const char __user ** 实现）")
 
+# 12) sulog/event.{c,h} —— 必须和第 11 组保持同一套 ABI（否则 4.19 编不过，且运行会 fault）
+#     第 11 组把 feature/sucompat.{c,h} 的 SUSFS 分支限定为 5.10+ 后，4.19 走的是
+#     「const char __user *filename + 传值 struct user_arg_ptr」那套：
+#         ksu_sulog_capture_sucompat(*filename_user, *((struct user_arg_ptr *)argv), GFP_KERNEL);
+#     但 sulog/event.h / event.c 仍按 CONFIG_KSU_SUSFS 声明「const char * + struct user_arg_ptr *」，
+#     于是 4.19 编译直接失败（实测 run 40453939277）：
+#         feature/sucompat.c:308:52: error: passing 'struct user_arg_ptr' to parameter of
+#             incompatible type 'struct user_arg_ptr *'; remove *
+#         feature/sucompat.c:328:59: 同上
+#     而且 event.c 的 SUSFS 分支用 ksu_sulog_copy_filename_kernel()（纯内核 memcpy 语义），
+#     把 __user 指针塞进去，在 arm64 + PAN 下会直接 fault —— 必须让 sulog 也走 _user 那套。
+#     修法：event.h / event.c 的 CONFIG_KSU_SUSFS 守卫改成「版本感知」，
+#           event.c 的 #ifndef CONFIG_KSU_SUSFS 反向守卫同步改，
+#           user_arg_null_ptr() 改回「返回值」（非 SUSFS 的 ksu_sulog_capture 收结构体值）。
+SL_NEW_GUARD = ("#if defined(CONFIG_KSU_SUSFS) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))"
+                " /* KSU-A52: 4.19 用 _user 那套 sulog 实现 */\n")
+SL_OLD_IFNDEF = "#ifndef CONFIG_KSU_SUSFS\n"
+SL_NEW_IFNDEF = ("#if !defined(CONFIG_KSU_SUSFS) || (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))"
+                 " /* KSU-A52: 4.19 用 _user 那套 sulog 实现 */\n")
+SL_MARK = "KSU-A52: 4.19 用 _user 那套 sulog 实现"
+for rel in ("sulog/event.h", "sulog/event.c"):
+    sp = K / rel
+    if not sp.is_file():
+        report.append(f"[=] 没有 {rel}，跳过")
+        continue
+    t = read(sp)
+    changed = []
+    if SL_MARK not in t:
+        if "linux/version.h" not in t:
+            t = VER_HDR + t
+            changed.append("include")
+        if rel == "sulog/event.h":
+            if OLD_GUARD in t:
+                t = t.replace(OLD_GUARD, SL_NEW_GUARD, 1)
+                changed.append("decl-guard")
+        else:
+            n = t.count(OLD_GUARD)
+            if n:
+                t = t.replace(OLD_GUARD, SL_NEW_GUARD)
+                changed.append(f"def-guard x{n}")
+            if SL_OLD_IFNDEF in t:
+                t = t.replace(SL_OLD_IFNDEF, SL_NEW_IFNDEF, 1)
+                changed.append("ifndef-guard")
+    # user_arg_null_ptr 必须「返回值」：4.19 的非 SUSFS ksu_sulog_capture() 收结构体值
+    if "static inline struct user_arg_ptr *user_arg_null_ptr(void)" in t:
+        t = t.replace(
+            "static inline struct user_arg_ptr *user_arg_null_ptr(void)\n"
+            "{\n    static struct user_arg_ptr null_arg = { 0 };\n    return &null_arg;\n}",
+            "static inline struct user_arg_ptr user_arg_null_ptr(void)" + f" /* {SL_MARK} */\n"
+            "{\n    struct user_arg_ptr null_arg = { 0 };\n    return null_arg;\n}")
+        changed.append("null-ptr->value")
+    if changed:
+        write(sp, t)
+        report.append(f"[+] {rel}: " + ", ".join(changed))
+    else:
+        report.append(f"[=] {rel}: sulog 4.19 ABI 已就位（幂等）")
+
 print("\n".join(report))
 
 # ---- 自检 ----
@@ -348,18 +405,24 @@ if cp.is_file():
 ev = K / "sulog" / "event.c"
 if ev.is_file():
     se = read(ev)
-    # 【关键】SUSFS 分支的 ksu_sulog_capture() 要 struct user_arg_ptr *，
-    # 所以 user_arg_null_ptr() 必须返回指针（上游原样）
-    if "static inline struct user_arg_ptr *user_arg_null_ptr(void)" not in se:
+    # 【关键】4.19 必须走「_user + 传值」那套 sulog：守卫版本感知 + user_arg_null_ptr 返回值
+    if "KSU-A52: 4.19 用 _user 那套 sulog 实现" not in se:
         ok = False
-        print("[!] 致命：event.c 的 user_arg_null_ptr 必须返回指针（SUSFS 分支要 struct user_arg_ptr *）")
-    if "return &null_arg;" not in se:
+        print("[!] 致命：event.c 的 sulog 分支未改成版本感知（4.19 编译会报 user_arg_ptr 类型不匹配）")
+    if "static inline struct user_arg_ptr user_arg_null_ptr(void)" not in se:
         ok = False
-        print("[!] 致命：event.c 的 user_arg_null_ptr 函数体必须 return &null_arg;")
+        print("[!] 致命：event.c 的 user_arg_null_ptr 必须返回值（4.19 的非 SUSFS capture 收结构体值）")
+    if "return &null_arg;" in se:
+        ok = False
+        print("[!] 致命：event.c 的 user_arg_null_ptr 仍返回指针（与 4.19 传值 API 不匹配）")
     # 【链接】4.19 没有 strncpy_from_user_nofault()，必须走 ksu_ 兼容实现
     if re.search(r"(?<!ksu_)strncpy_from_user_nofault\(", se):
         ok = False
         print("[!] 致命：event.c 仍有裸 strncpy_from_user_nofault（4.19 链接会 undefined reference）")
+eh = K / "sulog" / "event.h"
+if eh.is_file() and "KSU-A52: 4.19 用 _user 那套 sulog 实现" not in read(eh):
+    ok = False
+    print("[!] 致命：event.h 的 ksu_sulog_capture_sucompat 声明未版本感知（与 sucompat.c 实参不匹配）")
 kp = K / "extension" / "kpm" / "kpm.c"
 if kp.is_file() and re.search(r"access_ok\((?!VERIFY_)", read(kp)):
     ok = False
