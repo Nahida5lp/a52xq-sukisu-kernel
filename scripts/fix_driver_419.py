@@ -417,6 +417,66 @@ else:
             "（4.19 用普通实现，补上 ksu_adb_root_handle_execve_manual）"
         )
 
+# 14) feature/sucompat.c / runtime/ksud.c —— 两件事：
+#     (a) 回滚我上一版「让 sucompat 和 ksud 钩子并行」的改法
+#         （实测 run 40495354659 的产物刷上去 init 的 execve 直接 ENOENT、无限重启）
+#     (b) 真正的原因：SUSFS 版 ksu_handle_execveat_ksud() 里漏了 stop_execve_hook()
+#         非 SUSFS 版（ksud.c:343）在 zygote 启动后会把 ksu_execveat_hook 关掉，
+#         之后 fs/exec.c 的钩子才会转去 sucompat，把 /system/bin/su 重定向到 ksud。
+#         SUSFS 版只调了 on_post_fs_data()，钩子永远不关 →
+#         execve("/system/bin/su") 命中 KSU 的幻影 inode（stat 有、read 0 字节）→ ENOENT
+#         → 管理器取不到驱动 fd。
+#     修法：在 SUSFS 版 zygote 分支补一句 stop_execve_hook()，与上游非 SUSFS 版完全一致。
+SC_MARK = "KSU-A52: sucompat 必须和 ksud 钩子一起跑"
+SC_OLD = """    if (unlikely(ksu_execveat_hook)) {
+        return ksu_handle_execveat_ksud(fd, filename_ptr, argv, envp, flags);
+    }
+
+    return ksu_handle_execveat_sucompat(fd, filename_ptr, argv, envp, flags);"""
+SC_NEW = """    /* KSU-A52: sucompat 必须和 ksud 钩子一起跑 —— SUSFS 分支从不关闭
+       ksu_execveat_hook，若这里 return，su -> ksud 的重定向永远不执行，
+       execve("/system/bin/su") 返回 ENOENT，管理器就取不到驱动 fd。 */
+    if (unlikely(ksu_execveat_hook)) {
+        ksu_handle_execveat_ksud(fd, filename_ptr, argv, envp, flags);
+    }
+    return ksu_handle_execveat_sucompat(fd, filename_ptr, argv, envp, flags);"""
+
+psc = K / "feature" / "sucompat.c"
+if not psc.is_file():
+    report.append("[=] 没有 feature/sucompat.c，跳过 14(a)")
+else:
+    ssc = read(psc)
+    if SC_MARK in ssc:
+        write(psc, ssc.replace(SC_NEW, SC_OLD))
+        report.append("[+] sucompat.c: 已回滚「并行调用」（上一版导致 init execve ENOENT）")
+    elif SC_OLD in ssc:
+        report.append("[=] sucompat.c: 分发逻辑已是上游原样（幂等）")
+    else:
+        report.append("[!] sucompat.c: 未找到 ksu_handle_execveat 分发锚点 —— 上游结构变了")
+
+SE_MARK = "KSU-A52: SUSFS 版补 stop_execve_hook"
+SE_OLD = """#ifdef KSU_COMPAT_USE_STATIC_KEY
+                static_branch_disable(&is_first_zygote);
+#else
+                first_zygote = false;
+#endif"""
+SE_NEW = SE_OLD + """
+                stop_execve_hook(); /* """ + SE_MARK + """（否则 su 重定向永不生效） */"""
+
+pks = K / "runtime" / "ksud.c"
+if not pks.is_file():
+    report.append("[=] 没有 runtime/ksud.c，跳过 14(b)")
+else:
+    sks = read(pks)
+    if SE_MARK in sks:
+        report.append("[=] ksud.c: SUSFS 版已补 stop_execve_hook（幂等）")
+    elif SE_OLD not in sks:
+        report.append("[!] ksud.c: 未找到 SUSFS 版 zygote 分支锚点 —— 上游结构变了")
+    else:
+        write(pks, sks.replace(SE_OLD, SE_NEW, 1))
+        report.append("[+] ksud.c: SUSFS 版 zygote 分支补上 stop_execve_hook()"
+                      "（修 su 幻影 inode 的 ENOENT / 驱动 fd 取不到）")
+
 print("\n".join(report))
 
 # ---- 自检 ----
@@ -504,5 +564,15 @@ if pab.is_file() and AB_MARK not in read(pab):
     ok = False
     print("[!] 致命：adb_root.c 的 SUSFS 分支未版本感知 —— 4.19 链接会 undefined reference")
     print("    to `ksu_adb_root_handle_execve_manual'（该函数只在非 SUSFS 分支实现）")
+# 【su 重定向】SUSFS 版 ksu_handle_execveat_ksud 必须补 stop_execve_hook()，否则钩子永远不关，
+#    execve("/system/bin/su") 命中幻影 inode → ENOENT → 管理器「未检出驱动」
+if pks.is_file() and SE_MARK not in read(pks):
+    ok = False
+    print("[!] 致命：runtime/ksud.c 的 SUSFS 版 zygote 分支未补 stop_execve_hook()")
+    print("    → 4.19+SUSFS 上 execve(/system/bin/su) 会 ENOENT，管理器显示「未检出驱动」")
+if psc.is_file() and SC_MARK in read(psc):
+    ok = False
+    print("[!] 致命：sucompat.c 仍是「ksud 钩子 + sucompat 并行」的坏改法")
+    print("    → run 40495354659 实测该改法会让 init 的 execve ENOENT、无限重启")
 print("[OK] 驱动 4.19 适配检查通过" if ok else "[!] 有改动未生效")
 sys.exit(0 if ok else 1)
