@@ -89,26 +89,29 @@ if p.is_file():
 else:
     report.append("[=] 没有 extension/cpu_spoof.c，跳过")
 
-# 4) kernel/sulog/event.c —— 非 SUSFS 分支里 user_arg_null_ptr() 返回指针，
-#    但 ksu_sulog_capture() 的形参是结构体值 → 改成返回值。
+# 4) kernel/sulog/event.c —— 【不要动 user_arg_null_ptr()】
+#    本项目必然打开 CONFIG_KSU_SUSFS，此时 event.c 走第 93 行起的 SUSFS 分支：
+#        ksu_sulog_flatten_argv(struct user_arg_ptr *argv_user, ...)
+#        ksu_sulog_capture(..., struct user_arg_ptr *argv_user, gfp)
+#    而 user_arg_null_ptr() 上游本来就返回指针 → 原样即可。
+#    早期版本把它改成「返回结构体值」，反而在 4.19 上编译失败：
+#        error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'
+#    这里只做「撤销旧改动 + 校验」，不再改写。
 p = K / "sulog" / "event.c"
 if p.is_file():
     s = read(p)
-    changed = False
-    if "static inline struct user_arg_ptr *user_arg_null_ptr(void)" in s:
+    if "KSU-A52: 返回结构体值" in s:
         s = s.replace(
-            "static inline struct user_arg_ptr *user_arg_null_ptr(void)",
             "static inline struct user_arg_ptr user_arg_null_ptr(void) /* KSU-A52: 返回结构体值 */",
+            "static inline struct user_arg_ptr *user_arg_null_ptr(void)",
         )
-        # 函数体里还指针解引用，直接按字面量改（该字符串在非 SUSFS 分支里唯一）
-        if "return &null_arg;" in s:
-            s = s.replace("return &null_arg;", "return null_arg;")
-        changed = True
-    if changed:
+        s = s.replace("return null_arg;", "return &null_arg;")
         write(p, s)
-        report.append("[+] event.c: user_arg_null_ptr 已改为返回值")
+        report.append("[+] event.c: 已撤销「返回结构体值」改动（SUSFS 分支需要指针）")
+    if "static inline struct user_arg_ptr *user_arg_null_ptr(void)" in s:
+        report.append("[=] event.c: user_arg_null_ptr 返回指针，与 SUSFS 分支一致")
     else:
-        report.append("[=] event.c: 无需修改")
+        report.append("[!] event.c: 未找到 user_arg_null_ptr 指针版本 —— 上游结构变了，需人工确认")
 else:
     report.append("[=] 没有 sulog/event.c，跳过")
 
@@ -199,7 +202,24 @@ pb = K.parent.parent / "kernel" / "reboot.c"
 if pb.is_file():
     sb = read(pb)
     if "KSU-A52 sys_reboot hook" in sb:
-        report.append("[=] reboot.c: sys_reboot 挂钩已存在（幂等）")
+        # 挂钩已存在，但早期版本把返回值判断写反了 —— 驱动里 ksu_handle_sys_reboot()
+        # 返回 0 表示「已接管」，返回负值表示「这不是 KSU 的 reboot」。写成 if (返回值) 之后：
+        #   普通 reboot（magic1 != KSU_INSTALL_MAGIC1）→ 返回 -EINVAL（真）→ return 0
+        #   → reboot() 报告成功却根本不重启 → init 打印 reboot call returned →
+        #   init 退出 → do_exit → !CONFIG_PID_NS 的 zap_pid_ns_processes(){BUG();}
+        #   → kernel BUG at include/linux/pid_namespace.h:90 → panic（关机必崩）。
+        if "(magic1, magic2, cmd, &arg) == 0)" in sb:
+            report.append("[=] reboot.c: sys_reboot 挂钩已存在且判断正确（幂等）")
+        elif "ksu_handle_sys_reboot(magic1, magic2, cmd, &arg))" in sb:
+            sb = sb.replace(
+                "if (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg))",
+                "if (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg) == 0)",
+                1,
+            )
+            write(pb, sb)
+            report.append("[FIX] reboot.c: 挂钩判断方向已纠正（旧写法会吞掉正常 reboot 并导致关机 panic）")
+        else:
+            report.append("[!] reboot.c: 有挂钩但形态不认识 —— 需人工确认")
     else:
         idx = sb.find("SYSCALL_DEFINE4(reboot")
         brace = sb.find("\n{\n", idx) if idx != -1 else -1
@@ -211,7 +231,7 @@ if pb.is_file():
                 "\t\textern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,\n"
                 "\t\t\t\t\t\t    void __user **arg);\n"
                 "\t\t/* KSU-A52 sys_reboot hook: 打通 ksud 获取 supercall fd 的通道 */\n"
-                "\t\tif (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg))\n"
+                "\t\tif (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg) == 0)\n"
                 "\t\t\treturn 0;\n"
                 "\t}\n"
                 "#endif\n"
@@ -249,6 +269,65 @@ if pns.is_file():
 else:
     report.append("[=] 没有 preinit/runner/nolibc/sys.h，跳过")
 
+# 10) kernel/sulog/event.c —— 4.19 没有 strncpy_from_user_nofault()（5.8 才有）。
+#    驱动自带的 kernel_compat.h 已提供 ksu_strncpy_from_user_nofault()，
+#    同一文件 81 行、supercall/dispatch.c 512 行都在用它，只有 143 行漏了 →
+#    链接报错：
+#        sulog/event.c:143: undefined reference to `strncpy_from_user_nofault'
+#    这里只改这一处；带 (?<!ksu_) 负向断言，重复执行不会叠成 ksuksu_。
+p = K / "sulog" / "event.c"
+if p.is_file():
+    s = read(p)
+    npat = re.compile(r"(?<!ksu_)strncpy_from_user_nofault\([ \t]*arg,")
+    if npat.search(s):
+        s, n10 = npat.subn("ksu_strncpy_from_user_nofault(arg,", s)
+        write(p, s)
+        report.append(f"[+] event.c: {n10} 处 strncpy_from_user_nofault 改走 ksu_ 兼容实现（4.19 无此符号）")
+    elif "ksu_strncpy_from_user_nofault(arg," in s:
+        report.append("[=] event.c: nofault 拷贝已走 ksu_ 兼容实现（幂等）")
+    else:
+        report.append("[!] event.c: 未找到 strncpy_from_user_nofault(arg, ...) —— 上游结构变了")
+else:
+    report.append("[=] 没有 sulog/event.c，跳过")
+
+# 11) feature/sucompat.{c,h} —— 【开机 1.2 秒 panic 的元凶】SUSFS 分支的钩子 ABI 只适用于 5.10+
+#     驱动把 faccessat/stat 的实现分成两套：
+#       #ifdef CONFIG_KSU_SUSFS  → 内核侧传 struct filename **（5.10+ 的钩子形态）
+#       #else                    → 内核侧传 const char __user **（4.19 自己的钩子形态）
+#     而本项目 4.19 的钩子补丁（fs/open.c、fs/stat.c）传的正是 const char __user **。
+#     一旦 CONFIG_KSU_SUSFS=y，驱动就会编出 struct filename ** 那套，
+#     于是 (*filename)->name 把「用户地址」当内核指针解引用 → PAN 故障：
+#         Unable to handle kernel access to user memory outside uaccess routines
+#         at virtual address 000000000020623d
+#         pc : ksu_handle_faccessat+0x18/0xb4   lr : __arm64_sys_faccessat+0x40/0x74
+#         Kernel panic - not syncing: Fatal exception    (~1.2 s，init pid 1)
+#     → 开机即 panic，无限重启。
+#     修法：守卫改成「版本感知」，4.19 一律走 #else 那套（与钩子补丁一致）。
+#     安全性已核对：SUSFS 分支独有的 ksu_handle_execveat_init / ksu_handle_post_execveat_sucompat
+#     在别处只被 extern 声明、从未被调用（runtime/ksud.c:186 那行是纯声明），
+#     所以关掉 SUSFS 分支不会留下未定义符号。
+VER_HDR = "#include <linux/version.h>\n"
+OLD_GUARD = "#ifdef CONFIG_KSU_SUSFS\n"
+NEW_GUARD = ("#if defined(CONFIG_KSU_SUSFS) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))"
+             " /* KSU-A52: 4.19 钩子传 const char __user **，SUSFS 分支只适合 5.10+ */\n")
+for rel in ("feature/sucompat.c", "feature/sucompat.h"):
+    sp = K / rel
+    if not sp.is_file():
+        report.append(f"[=] 没有 {rel}，跳过")
+        continue
+    t = read(sp)
+    if "SUSFS 分支只适合 5.10+" in t:
+        report.append(f"[=] {rel}: SUSFS 分支已加版本守卫（幂等）")
+        continue
+    if OLD_GUARD not in t:
+        report.append(f"[!] {rel}: 未找到 '#ifdef CONFIG_KSU_SUSFS' 锚点 —— 上游结构变了")
+        continue
+    if "linux/version.h" not in t:
+        t = t.replace(OLD_GUARD, VER_HDR + OLD_GUARD, 1)
+    t = t.replace(OLD_GUARD, NEW_GUARD, 1)
+    write(sp, t)
+    report.append(f"[+] {rel}: SUSFS 钩子分支已限定为 5.10+（4.19 改走 const char __user ** 实现）")
+
 print("\n".join(report))
 
 # ---- 自检 ----
@@ -269,12 +348,18 @@ if cp.is_file():
 ev = K / "sulog" / "event.c"
 if ev.is_file():
     se = read(ev)
-    if "static inline struct user_arg_ptr *user_arg_null_ptr(void)" in se:
+    # 【关键】SUSFS 分支的 ksu_sulog_capture() 要 struct user_arg_ptr *，
+    # 所以 user_arg_null_ptr() 必须返回指针（上游原样）
+    if "static inline struct user_arg_ptr *user_arg_null_ptr(void)" not in se:
         ok = False
-        print("[!] event.c 签名未修改")
-    if "return &null_arg;" in se:
+        print("[!] 致命：event.c 的 user_arg_null_ptr 必须返回指针（SUSFS 分支要 struct user_arg_ptr *）")
+    if "return &null_arg;" not in se:
         ok = False
-        print("[!] event.c 函数体仍返回指针")
+        print("[!] 致命：event.c 的 user_arg_null_ptr 函数体必须 return &null_arg;")
+    # 【链接】4.19 没有 strncpy_from_user_nofault()，必须走 ksu_ 兼容实现
+    if re.search(r"(?<!ksu_)strncpy_from_user_nofault\(", se):
+        ok = False
+        print("[!] 致命：event.c 仍有裸 strncpy_from_user_nofault（4.19 链接会 undefined reference）")
 kp = K / "extension" / "kpm" / "kpm.c"
 if kp.is_file() and re.search(r"access_ok\((?!VERIFY_)", read(kp)):
     ok = False
@@ -303,9 +388,18 @@ if pb.is_file():
     elif "ksu_handle_sys_reboot(magic1, magic2, cmd, &arg)" not in srb:
         ok = False
         print("[!] reboot.c 的挂钩形式不对")
+    elif "(magic1, magic2, cmd, &arg) == 0)" not in srb:
+        ok = False
+        print("[!] 致命：reboot.c 挂钩判断方向反了 —— 正常 reboot 会被吞掉，关机时 init 退出 → panic")
 else:
     ok = False
     print("[!] 找不到 kernel/reboot.c")
+# 【开机 panic 的元凶】sucompat 的 SUSFS 分支必须限定 5.10+，否则 4.19 一开机就 PAN 故障 panic
+for rel in ("feature/sucompat.c", "feature/sucompat.h"):
+    sp2 = K / rel
+    if sp2.is_file() and "SUSFS 分支只适合 5.10+" not in read(sp2):
+        ok = False
+        print(f"[!] 致命：{rel} 的 SUSFS 分支未加版本守卫 —— 4.19 上开机约 1.2 秒必 panic 重启")
 if pns.is_file() and "KSU-A52 vfork for arm64" not in read(pns):
     ok = False
     print("[!] 致命：preinit runner 的 arm64 vfork 分支未处理（4.19 会因 clone_args 编译失败）")
