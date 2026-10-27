@@ -94,8 +94,9 @@ echo "=== [6.5/8] SUSFS：内核补丁 + v2 API 兼容层 ==="
 # 故额外补 fs/susfs_compat_419.c 兼容层，并把驱动 dispatch.c 的实参改成 *arg。
 # 兼容层两文件随脚本分发：paste 直取，raw 作为兜底
 fetch() { curl -fsSL --max-time 90 -o "$1" "$2" && return 0; curl -fsSL --max-time 90 -o "$1" "$3"; }
-fetch "$W/scripts/apply_susfs_419.py" "https://paste.c-net.org/NearlyProwess" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/apply_susfs_419.py"
-fetch "$W/scripts/susfs_compat_419.c"  "https://paste.c-net.org/BloatedThinner" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/susfs_compat_419.c"
+fetch "$W/scripts/apply_susfs_419.py" "https://paste.c-net.org/SkippyVacant" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/apply_susfs_419.py"
+fetch "$W/scripts/susfs_compat_419.c"  "https://paste.c-net.org/HappenSimple" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/susfs_compat_419.c"
+fetch "$W/scripts/fix_susfs_rejects.py" "https://paste.c-net.org/YogurtJumpsuit" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/fix_susfs_rejects.py"
 SUSFS_DIR="$W/.susfs4ksu"
 rm -rf "$SUSFS_DIR"; mkdir -p "$SUSFS_DIR"
 SUSFS_OK=0
@@ -112,6 +113,46 @@ python3 "$W/scripts/apply_susfs_419.py" . "$SUSFS_DIR" "$W/scripts" || { echo "[
 echo "--- SUSFS 落地检查 ---"
 grep -n 'susfs' fs/Makefile || true
 grep -c 'susfs' security/selinux/avc.c fs/susfs_compat_419.c 2>/dev/null || true
+echo "--- susfs_def.h v2 宏检查（必须 3 个都有） ---"
+for M in SUSFS_MAGIC CMD_SUSFS_ADD_SUS_PATH_LOOP CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING; do
+  printf '%-34s %s\n' "$M" "$(grep -c "$M" include/linux/susfs_def.h || true)"
+done
+echo "--- SUSFS 链接缺口检查（starts/ends 声明+实现、pty 死钩子） ---"
+grep -c 'susfs_starts_with' include/linux/susfs.h fs/susfs_compat_419.c 2>/dev/null || true
+grep -n 'SUSFS-HANDFIX:devpts-dead-hook' drivers/tty/pty.c || echo '[!] pty.c 的 ksu_handle_devpts 死钩子未移除'
+echo "--- 驱动 event.c nofault 检查（裸 strncpy_from_user_nofault 必须 0） ---"
+grep -c 'ksu_strncpy_from_user_nofault' KernelSU/kernel/sulog/event.c || true
+
+echo "=== [6.6/8] SELinux 隐藏：4.19 后端 ==="
+fetch "$W/scripts/apply_selinux_hide_419.py" "https://paste.c-net.org/CarnivalHobby" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/apply_selinux_hide_419.py"
+fetch "$W/scripts/selinux_hide_419.c" "https://paste.c-net.org/JinxedCarve" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/selinux_hide_419.c"
+python3 "$W/scripts/apply_selinux_hide_419.py" . "$W/scripts" || { echo "[!] SELinux 隐藏后端应用失败"; exit 1; }
+echo "--- SELinux 隐藏落地检查 ---"
+grep -n 'ksu_selinux_fake_status_page' security/selinux/ss/status.c || true
+for f in KernelSU/kernel/ksu_main.c KernelSU/kernel/ksu.c; do
+  [ -f "$f" ] && grep -n 'selinux_hide_419\|ksu_selinux_hide_init' "$f" || true
+done
+echo "--- ksud.c 里 5.10 守卫残留（必须 0） ---"
+grep -c 'KERNEL_VERSION(5, 10, 0)' KernelSU/kernel/runtime/ksud.c || true
+
+# 硬断言：run #2 的 4 个 undefined reference 必须全部闭合，否则白等 18 分钟。
+echo "--- 链接缺口硬断言（run #2 的 4 个 undefined reference） ---"
+if grep -q 'ksu_handle_devpts((struct inode' drivers/tty/pty.c; then
+  echo '[!] 致命：pty.c 仍调用无定义的 ksu_handle_devpts —— 链接必失败'; exit 1
+fi
+if ! grep -q 'bool susfs_starts_with' include/linux/susfs.h; then
+  echo '[!] 致命：susfs.h 缺 susfs_starts_with 声明 —— 链接必失败'; exit 1
+fi
+for F in susfs_starts_with susfs_ends_with; do
+  if ! grep -q "bool $F" fs/susfs_compat_419.c; then
+    echo "[!] 致命：susfs_compat_419.c 缺 $F 实现 —— 链接必失败"; exit 1
+  fi
+done
+if grep -qE '(^|[^_a-z])strncpy_from_user_nofault\(' KernelSU/kernel/sulog/event.c; then
+  echo '[!] 致命：event.c 仍有裸 strncpy_from_user_nofault —— 4.19 链接必失败'; exit 1
+fi
+echo '[OK] 链接缺口已全部闭合 ✓'
+echo ""
 
 echo "=== [7/8] config + 编译 ==="
 DEF=arch/arm64/configs/a52xq_defconfig
