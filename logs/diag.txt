@@ -1,18 +1,12 @@
 === BUILD_RC=1 ===
 --- RELEASE 标记 ---
 --- 关键错误扫描 ---
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/feature/sucompat.c:308:52: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/feature/sucompat.c:328:59: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
-/home/runner/a52xq-build/out/build.log:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
-/home/runner/a52xq-build/out/build.log:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
-/home/runner/a52xq-build/out/build.log:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+/home/runner/a52xq-build/out/build.log:/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/sucompat.c:357: undefined reference to `ksu_adb_root_handle_execve_manual'
+/home/runner/a52xq-build/out/build.log:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1191: vmlinux] Error 1
 /home/runner/a52xq-build/out/build.log:make: *** [Makefile:146: sub-make] Error 2
 /home/runner/out.txt:--- 链接缺口硬断言（run #2 的 4 个 undefined reference） ---
-/home/runner/out.txt:../drivers/kernelsu/feature/sucompat.c:308:52: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
-/home/runner/out.txt:../drivers/kernelsu/feature/sucompat.c:328:59: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
-/home/runner/out.txt:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
-/home/runner/out.txt:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
-/home/runner/out.txt:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+/home/runner/out.txt:/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/sucompat.c:357: undefined reference to `ksu_adb_root_handle_execve_manual'
+/home/runner/out.txt:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1191: vmlinux] Error 1
 /home/runner/out.txt:make: *** [Makefile:146: sub-make] Error 2
 --- reboot.c 挂钩（必须出现 ksu_handle_sys_reboot == 0）---
 318:		extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
@@ -38,16 +32,6 @@ CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
 51:		extern struct page *ksu_selinux_fake_status_page(void);
 52:		struct page *ksu_fake = ksu_selinux_fake_status_page();
 --- build.log 尾部 ---
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/dispatcher/src/wlan_gpio_tgt_api.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/dispatcher/src/wlan_gpio_ucfg_api.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/core/src/wlan_gpio_api.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/os_if/linux/gpio/src/wlan_cfg80211_gpio.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/target_if/gpio/target_if_gpio.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/core/src/wlan_green_ap_main.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/dispatcher/src/wlan_green_ap_api.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/dispatcher/src/wlan_green_ap_ucfg_api.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/target_if/green_ap/src/target_if_green_ap.o
-  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_global_api.o
   CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_ucfg_api.o
   CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_main.o
   CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_obj_mgr.o
@@ -55,8 +39,18 @@ CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
   AR      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/built-in.a
   AR      drivers/net/wireless/built-in.a
   AR      drivers/net/built-in.a
-make[2]: Target '__build' not remade because of errors.
-make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+  AR      drivers/built-in.a
+  GEN     .version
+  CHK     include/generated/compile.h
+  AR      built-in.a
+  MODPOST vmlinux.o
+WARNING: modpost: Found 1 section mismatch(es).
+To see full details build your kernel with:
+'make CONFIG_DEBUG_SECTION_MISMATCH=y'
+/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: warning: -z norelro ignored
+/home/runner/a52xq-build/kernel/toolchain/toolchains-gcc-10.3.0/bin/aarch64-buildroot-linux-gnu-ld: drivers/kernelsu/ksu_main.o: in function `ksu_handle_execveat':
+/home/runner/a52xq-build/kernel/out/../drivers/kernelsu/feature/sucompat.c:357: undefined reference to `ksu_adb_root_handle_execve_manual'
+make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1191: vmlinux] Error 1
 make[1]: Target '_all' not remade because of errors.
 make[1]: Leaving directory '/home/runner/a52xq-build/kernel/out'
 make: *** [Makefile:146: sub-make] Error 2
