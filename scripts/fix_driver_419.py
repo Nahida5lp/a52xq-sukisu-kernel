@@ -385,6 +385,38 @@ for rel in ("sulog/event.h", "sulog/event.c"):
     else:
         report.append(f"[=] {rel}: sulog 4.19 ABI 已就位（幂等）")
 
+# 13) feature/adb_root.c —— 和第 11/12 组同一个坑：SUSFS 分支只适用于 5.10+
+#     第 11 组让 4.19 的 sucompat 走「非 SUSFS」那套后，ksu_handle_execveat() 里会调用
+#         ksu_adb_root_handle_execve_manual((*filename_ptr)->name, (struct user_arg_ptr *)envp);
+#     而这个函数只在 adb_root.c 的「非 SUSFS」分支（186-325 行）里实现，
+#     SUSFS 分支没有 → 编译过了、链接挂（实测 run 40460210337）：
+#         drivers/kernelsu/feature/sucompat.c:357: undefined reference to
+#             `ksu_adb_root_handle_execve_manual'
+#     修法：adb_root.c 的两处 CONFIG_KSU_SUSFS 守卫也改成版本感知，4.19 回到
+#     和「无 SUSFS 的老版本内核」完全相同的普通实现（那条路本来就编过、能开机）。
+AB_MARK = "KSU-A52: 4.19 用普通 adb_root 实现"
+pab = K / "feature" / "adb_root.c"
+if not pab.is_file():
+    report.append("[=] 没有 feature/adb_root.c，跳过")
+else:
+    sab = read(pab)
+    if AB_MARK in sab:
+        report.append("[=] adb_root.c: SUSFS 分支已加版本守卫（幂等）")
+    elif OLD_GUARD not in sab:
+        report.append("[!] adb_root.c: 未找到 '#ifdef CONFIG_KSU_SUSFS' 锚点 —— 上游结构变了")
+    else:
+        nab = sab.count(OLD_GUARD)
+        sab = sab.replace(
+            OLD_GUARD,
+            "#if defined(CONFIG_KSU_SUSFS) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0))"
+            f" /* {AB_MARK} */\n",
+        )
+        write(pab, sab)
+        report.append(
+            f"[+] adb_root.c: {nab} 处 SUSFS 守卫改成版本感知"
+            "（4.19 用普通实现，补上 ksu_adb_root_handle_execve_manual）"
+        )
+
 print("\n".join(report))
 
 # ---- 自检 ----
@@ -466,5 +498,11 @@ for rel in ("feature/sucompat.c", "feature/sucompat.h"):
 if pns.is_file() and "KSU-A52 vfork for arm64" not in read(pns):
     ok = False
     print("[!] 致命：preinit runner 的 arm64 vfork 分支未处理（4.19 会因 clone_args 编译失败）")
+# 【链接缺口】adb_root.c 的 SUSFS 分支必须同样限定 5.10+，否则
+#   sucompat.c:357 undefined reference to `ksu_adb_root_handle_execve_manual'
+if pab.is_file() and AB_MARK not in read(pab):
+    ok = False
+    print("[!] 致命：adb_root.c 的 SUSFS 分支未版本感知 —— 4.19 链接会 undefined reference")
+    print("    to `ksu_adb_root_handle_execve_manual'（该函数只在非 SUSFS 分支实现）")
 print("[OK] 驱动 4.19 适配检查通过" if ok else "[!] 有改动未生效")
 sys.exit(0 if ok else 1)

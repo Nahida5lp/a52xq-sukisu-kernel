@@ -1,4 +1,4 @@
-=== publish 自查报告 Tue Oct 27 06:17:31 UTC 2026 ===
+=== publish 自查报告 Tue Oct 27 10:17:37 UTC 2026 ===
 --- README/LICENSE 大小 ---
 25241 README.md
 18093 LICENSE
@@ -6,14 +6,14 @@
 --- scripts / patches ---
 patches:
 total 8
--rw-r--r-- 1 runner runner 4740 Oct 27 06:17 ksu_hooks_sukisu_4.19.patch
+-rw-r--r-- 1 runner runner 4740 Oct 27 10:17 ksu_hooks_sukisu_4.19.patch
 
 scripts:
-total 112
--rwxr-xr-x 1 runner runner 72874 Oct 27 06:17 build_builtin.sh
--rw-r--r-- 1 runner runner 24015 Oct 27 06:17 fix_driver_419.py
--rw-r--r-- 1 runner runner  8430 Oct 27 06:17 fix_sources_for_419.py
--rw-r--r-- 1 runner runner  4080 Oct 27 06:17 strip_legacy_ksu_hooks.py
+total 120
+-rwxr-xr-x 1 runner runner 75718 Oct 27 10:17 build_builtin.sh
+-rw-r--r-- 1 runner runner 26146 Oct 27 10:17 fix_driver_419.py
+-rw-r--r-- 1 runner runner  8430 Oct 27 10:17 fix_sources_for_419.py
+-rw-r--r-- 1 runner runner  4080 Oct 27 10:17 strip_legacy_ksu_hooks.py
 --- 工作流 ---
 build-kernel.yml
 build-susfs-fixed.yml
