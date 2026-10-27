@@ -1,18 +1,13 @@
 === BUILD_RC=1 ===
 --- RELEASE 标记 ---
 --- 关键错误扫描 ---
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:424:19: error: use of undeclared identifier 'SUSFS_MAGIC'
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:430:14: error: use of undeclared identifier 'CMD_SUSFS_ADD_SUS_PATH_LOOP'
-/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:475:14: error: use of undeclared identifier 'CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING'
 /home/runner/a52xq-build/out/build.log:../drivers/kernelsu/feature/sucompat.c:308:52: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
 /home/runner/a52xq-build/out/build.log:../drivers/kernelsu/feature/sucompat.c:328:59: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
 /home/runner/a52xq-build/out/build.log:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
 /home/runner/a52xq-build/out/build.log:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
 /home/runner/a52xq-build/out/build.log:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
 /home/runner/a52xq-build/out/build.log:make: *** [Makefile:146: sub-make] Error 2
-/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:424:19: error: use of undeclared identifier 'SUSFS_MAGIC'
-/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:430:14: error: use of undeclared identifier 'CMD_SUSFS_ADD_SUS_PATH_LOOP'
-/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:475:14: error: use of undeclared identifier 'CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING'
+/home/runner/out.txt:--- 链接缺口硬断言（run #2 的 4 个 undefined reference） ---
 /home/runner/out.txt:../drivers/kernelsu/feature/sucompat.c:308:52: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
 /home/runner/out.txt:../drivers/kernelsu/feature/sucompat.c:328:59: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
 /home/runner/out.txt:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
@@ -39,6 +34,9 @@ CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
 CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
 CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
 11:#define SUSFS_VERSION "v1.5.5"
+--- SELinux 隐藏检查 ---
+51:		extern struct page *ksu_selinux_fake_status_page(void);
+52:		struct page *ksu_fake = ksu_selinux_fake_status_page();
 --- build.log 尾部 ---
   CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/dispatcher/src/wlan_gpio_tgt_api.o
   CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/dispatcher/src/wlan_gpio_ucfg_api.o
