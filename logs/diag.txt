@@ -1,5 +1,67 @@
+=== BUILD_RC=1 ===
+--- RELEASE 标记 ---
 --- 关键错误扫描 ---
---- reboot.c 挂钩检查（必须出现） ---
---- fs/exec.c sucompat 检查（必须非 NULL） ---
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:424:19: error: use of undeclared identifier 'SUSFS_MAGIC'
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:430:14: error: use of undeclared identifier 'CMD_SUSFS_ADD_SUS_PATH_LOOP'
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/supercall/dispatch.c:475:14: error: use of undeclared identifier 'CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING'
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/feature/sucompat.c:308:52: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
+/home/runner/a52xq-build/out/build.log:../drivers/kernelsu/feature/sucompat.c:328:59: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
+/home/runner/a52xq-build/out/build.log:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
+/home/runner/a52xq-build/out/build.log:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
+/home/runner/a52xq-build/out/build.log:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+/home/runner/a52xq-build/out/build.log:make: *** [Makefile:146: sub-make] Error 2
+/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:424:19: error: use of undeclared identifier 'SUSFS_MAGIC'
+/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:430:14: error: use of undeclared identifier 'CMD_SUSFS_ADD_SUS_PATH_LOOP'
+/home/runner/out.txt:../drivers/kernelsu/supercall/dispatch.c:475:14: error: use of undeclared identifier 'CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING'
+/home/runner/out.txt:../drivers/kernelsu/feature/sucompat.c:308:52: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
+/home/runner/out.txt:../drivers/kernelsu/feature/sucompat.c:328:59: error: passing 'struct user_arg_ptr' to parameter of incompatible type 'struct user_arg_ptr *'; remove *
+/home/runner/out.txt:make[3]: *** [../scripts/Makefile.build:339: drivers/kernelsu/ksu_main.o] Error 1
+/home/runner/out.txt:make[2]: *** [../scripts/Makefile.build:642: drivers/kernelsu] Error 2
+/home/runner/out.txt:make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+/home/runner/out.txt:make: *** [Makefile:146: sub-make] Error 2
+--- reboot.c 挂钩（必须出现 ksu_handle_sys_reboot == 0）---
+318:		extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd,
+321:		if (ksu_handle_sys_reboot(magic1, magic2, cmd, &arg) == 0)
+--- fs/exec.c sucompat（不得为 NULL）---
+1926:extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
+1940:		ksu_handle_execveat_sucompat((int *)AT_FDCWD, &filename, &argv, &envp, 0); /* KSU-A52: 原来传 NULL 会 panic */
 --- SUSFS 落地检查 ---
+17:obj-$(CONFIG_KSU_SUSFS) += susfs.o susfs_compat_419.o
+security/selinux/avc.c 里 susfs 出现次数: 6
+CONFIG_KSU=y
+CONFIG_KSU_FEATURE_ADBROOT=y
+CONFIG_KSU_SUSFS=y
+CONFIG_KSU_SUSFS_SUS_PATH=y
+CONFIG_KSU_SUSFS_SUS_KSTAT=y
+CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+CONFIG_KSU_SUSFS_ENABLE_LOG=y
+CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+11:#define SUSFS_VERSION "v1.5.5"
 --- build.log 尾部 ---
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/dispatcher/src/wlan_gpio_tgt_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/dispatcher/src/wlan_gpio_ucfg_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/gpio/core/src/wlan_gpio_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/os_if/linux/gpio/src/wlan_cfg80211_gpio.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/target_if/gpio/target_if_gpio.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/core/src/wlan_green_ap_main.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/dispatcher/src/wlan_green_ap_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/green_ap/dispatcher/src/wlan_green_ap_ucfg_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/target_if/green_ap/src/target_if_green_ap.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_global_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_ucfg_api.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_main.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_obj_mgr.o
+  CC      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/../qca-wifi-host-cmn/umac/cmn_services/crypto/src/wlan_crypto_param_handling.o
+  AR      drivers/net/wireless/qualcomm/wcn39xx/qcacld-3.0/built-in.a
+  AR      drivers/net/wireless/built-in.a
+  AR      drivers/net/built-in.a
+make[2]: Target '__build' not remade because of errors.
+make[1]: *** [/home/runner/a52xq-build/kernel/Makefile:1211: drivers] Error 2
+make[1]: Target '_all' not remade because of errors.
+make[1]: Leaving directory '/home/runner/a52xq-build/kernel/out'
+make: *** [Makefile:146: sub-make] Error 2
+make: Target '_all' not remade because of errors.
+make: Leaving directory '/home/runner/a52xq-build/kernel'
+cp: cannot stat 'out/arch/arm64/boot/Image': No such file or directory
