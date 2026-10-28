@@ -591,6 +591,59 @@ if pks.is_file():
         write(pks, sk2)
         report.append("[+] ksud.c: on_post_fs_data 调用 ksu_force_crown_manager() 并打印管理器状态")
 
+# 16) kernel/hook/lsm_hook.c —— SUSFS 分支补注册 LSM 的 task_fix_setuid
+#     4.19 既没有 kprobe 也没有 kernel/sys.c 的 setresuid 挂钩；而 lsm_hook.c 的
+#     ksu_hooks[] 在 CONFIG_KSU_SUSFS 下把 task_fix_setuid 整块 #ifndef 掉了，
+#     于是 ksu_handle_setresuid() 在 SUSFS 版里永远没人调用。后果：
+#       1. zygote 拉起管理器进程时不会 install fd for manager → 管理器拿不到 supercall fd
+#          → 界面「内核上未检测到 SukiSU 驱动程序」；
+#       2. 管理器的 seccomp 不会被 disable_seccomp() 解除。
+LSM_MARK = "KSU-A52: SUSFS 版注册 task_fix_setuid"
+plsm = K / "hook" / "lsm_hook.c"
+LSM_FUNC = """#ifdef CONFIG_KSU_SUSFS
+/* """ + LSM_MARK + """
+ *
+ * 4.19 既没有 kprobe 也没有 kernel/sys.c 的 setresuid 挂钩；而 lsm_hook.c 的
+ * ksu_hooks[] 在 CONFIG_KSU_SUSFS 下把 task_fix_setuid 整块 #ifndef 掉了，
+ * 于是 ksu_handle_setresuid() 在 SUSFS 版里永远没人调用。后果：
+ *   1. 管理器进程被 zygote 拉起来时拿不到 supercall fd → 界面「未检出驱动」；
+ *   2. 管理器的 seccomp 不会被 disable_seccomp() 解除。
+ * 这里补一个壳子，把 LSM 的 task_fix_setuid 转发给 SUSFS 分支已有的实现。
+ */
+static int ksu_task_fix_setuid_susfs(struct cred *new, const struct cred *old, int flags)
+{
+    if (unlikely(!new || !old))
+        return 0;
+    return ksu_handle_setresuid(new->uid.val, new->euid.val, new->suid.val);
+}
+#endif
+
+"""
+LSM_ANCHOR = "static struct security_hook_list ksu_hooks[] = {"
+LSM_OLD = """#ifndef CONFIG_KSU_SUSFS
+    LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
+#endif"""
+LSM_NEW = """#ifdef CONFIG_KSU_SUSFS
+    /* """ + LSM_MARK + """ */
+    LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid_susfs),
+#else
+    LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
+#endif"""
+if plsm.is_file():
+    sl = read(plsm)
+    if "ksu_task_fix_setuid_susfs" in sl:
+        report.append("[=] lsm_hook.c: SUSFS 版 task_fix_setuid 已注册（幂等）")
+    elif LSM_OLD not in sl:
+        report.append("[!] lsm_hook.c: 未找到 task_fix_setuid 注册块 —— 上游结构变了")
+    else:
+        sl = sl.replace(LSM_OLD, LSM_NEW, 1)
+        if LSM_ANCHOR in sl:
+            sl = sl.replace(LSM_ANCHOR, LSM_FUNC + LSM_ANCHOR, 1)
+        write(plsm, sl)
+        report.append("[+] lsm_hook.c: SUSFS 版注册 task_fix_setuid（管理器才能拿到 fd）")
+else:
+    report.append("[!] 找不到 hook/lsm_hook.c")
+
 print("\n".join(report))
 
 # ---- 自检 ----
@@ -696,5 +749,11 @@ if pth.is_file() and FM_MARK not in read(pth):
 if pks.is_file() and "ksu_force_crown_manager();" not in read(pks):
     ok = False
     print("[!] 致命：on_post_fs_data() 未调用 ksu_force_crown_manager()")
+# 【管理器 fd】SUSFS 版必须注册 task_fix_setuid，否则 ksu_handle_setresuid() 永不执行，
+#   管理器进程 spawn 时拿不到 supercall fd → 界面一直显示「未检测到驱动程序」
+if plsm.is_file() and "ksu_task_fix_setuid_susfs" not in read(plsm):
+    ok = False
+    print("[!] 致命：lsm_hook.c 的 SUSFS 分支没有注册 task_fix_setuid")
+    print("    → 管理器拿不到 supercall fd，界面会一直「内核上未检测到 SukiSU 驱动程序」")
 print("[OK] 驱动 4.19 适配检查通过" if ok else "[!] 有改动未生效")
 sys.exit(0 if ok else 1)
