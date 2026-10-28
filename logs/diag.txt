@@ -1,6 +1,6 @@
 === BUILD_RC=0 ===
 --- RELEASE 标记 ---
-5307:RELEASE_OK kbuild-1028-113216
+5310:RELEASE_OK kbuild-1028-115719
 --- 关键错误扫描 ---
 /home/runner/out.txt:--- 链接缺口硬断言（run #2 的 4 个 undefined reference） ---
 --- reboot.c 挂钩（必须出现 ksu_handle_sys_reboot == 0）---
@@ -29,9 +29,9 @@ CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
 --- build.log 尾部 ---
 GAPs covered bytes len   : 0x200 (512 B)  
 
-integrity_crypto_addrs:  name: 'integrity_crypto_addrs', type: 'OBJECT', bind: 'GLOBAL', ndx: '3', visibility: 'DEFAULT', address: '0xffffff8009d9d3f8', size: '0x10000'
-crypto_buildtime_address:  name: 'crypto_buildtime_address', type: 'OBJECT', bind: 'GLOBAL', ndx: '3', visibility: 'DEFAULT', address: '0xffffff8009dad3f8', size: '0x8'
-HMAC for "crypto" module is: b'ef6043010f8ffb43e7eedcf46215e71893118258755a0a0df3a27f62c14d82dd'
+integrity_crypto_addrs:  name: 'integrity_crypto_addrs', type: 'OBJECT', bind: 'GLOBAL', ndx: '3', visibility: 'DEFAULT', address: '0xffffff8009d9d0b8', size: '0x10000'
+crypto_buildtime_address:  name: 'crypto_buildtime_address', type: 'OBJECT', bind: 'GLOBAL', ndx: '3', visibility: 'DEFAULT', address: '0xffffff8009dad0b8', size: '0x8'
+HMAC for "crypto" module is: b'7fae2e825a809e1a79248cc7750c6572477327e41988c84084e05cc1c565b21c'
 FIPS integrity procedure has been finished for crypto
   OBJCOPY arch/arm64/boot/Image
   Building modules, stage 2.
@@ -48,7 +48,7 @@ FIPS integrity procedure has been finished for crypto
   LD [M]  drivers/media/platform/msm/dvb/demux/mpq-dmx-hw-plugin.ko
   LD [M]  drivers/mmc/core/mmc_test.ko
   LD [M]  net/ipv4/tcp_westwood.ko
-  LD [M]  drivers/soc/qcom/llcc_perfmon.ko
   LD [M]  net/ipv4/tcp_htcp.ko
+  LD [M]  drivers/soc/qcom/llcc_perfmon.ko
 make[1]: Leaving directory '/home/runner/a52xq-build/kernel/out'
 make: Leaving directory '/home/runner/a52xq-build/kernel'
