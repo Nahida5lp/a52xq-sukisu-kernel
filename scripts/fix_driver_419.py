@@ -477,6 +477,174 @@ else:
         report.append("[+] ksud.c: SUSFS 版 zygote 分支补上 stop_execve_hook()"
                       "（修 su 幻影 inode 的 ENOENT / 驱动 fd 取不到）")
 
+# 15) manager/throne_tracker.c + runtime/ksud.c —— 管理器「未检出驱动」的确定性修复
+#     现象：SUSFS 内核上管理器显示「未检到 SukiSU 驱动」，logcat 里是
+#         KsuCli: gw2: Unable to create a shell!
+#         Caused by: java.io.IOException: Cannot run program "su": error=2, No such file or directory
+#     机理：驱动判「管理器永远放行」的唯一入口是
+#         __ksu_is_allow_uid() -> is_uid_manager() -> ksu_manager_uid_authorized(uid)
+#       而它只认两种来源：
+#         (a) ksu_manager_appid == appid（由 track_throne() 扫 /data/app、校验 APK 签名后设置）
+#         (b) dynamic_manager_enabled && 已登记 uid
+#       4.19 + SUSFS 上 (a) 这条链（fsnotify 监听 packages.list + 内核读 APK 校验签名）不可靠；
+#       (b) 又依赖管理器自己写 /data/adb/ksu/.dynamic_managers。
+#       appid 一旦停在 KSU_INVALID_APPID，管理器进程的 su 就不被放行 →
+#       execve("/system/bin/su") 命中幻影 inode → ENOENT → 「未检出驱动」。
+#     修法：post-fs-data 阶段直接按包名从 /data/system/packages.list 取 uid 认领管理器；
+#           只在 appid 未设置时执行，签名识别成功的情况下不会覆盖。
+FM_MARK = "KSU-A52: 按包名兜底认领管理器"
+FM_FUNC = """/* """ + FM_MARK + """（4.19+SUSFS 下签名识别链不可靠时的兜底） */
+void ksu_force_crown_manager(void)
+{
+    struct file *fp;
+    char *buf;
+    int n;
+    loff_t pos = 0;
+    char *line, *nl, *sp;
+    unsigned long uid;
+
+    if (ksu_is_manager_appid_valid())
+        return;
+    fp = filp_open(SYSTEM_PACKAGES_LIST_PATH, O_RDONLY, 0);
+    if (IS_ERR(fp)) {
+        pr_info("KSU-A52: 打不开 " SYSTEM_PACKAGES_LIST_PATH "，跳过兜底认领\\n");
+        return;
+    }
+    buf = kzalloc(65536, GFP_KERNEL);
+    if (!buf) {
+        filp_close(fp, 0);
+        return;
+    }
+    n = kernel_read(fp, buf, 65536 - 1, &pos);
+    filp_close(fp, 0);
+    if (n <= 0) {
+        kfree(buf);
+        return;
+    }
+    buf[n] = '\\0';
+    for (line = buf; line && *line; line = nl) {
+        nl = strchr(line, '\\n');
+        if (nl)
+            *nl++ = '\\0';
+        if (strncmp(line, KSU_PACKAGE_NAME " ", sizeof(KSU_PACKAGE_NAME)) != 0)
+            continue;
+        sp = strchr(line, ' ');
+        if (!sp)
+            break;
+        uid = 0;
+        for (sp = sp + 1; *sp >= '0' && *sp <= '9'; ++sp) {
+            if (uid < 100000)
+                uid = uid * 10 + (unsigned long)(*sp - '0');
+        }
+        if (uid > 0 && uid < 100000) {
+            pr_info("KSU-A52: 按包名认定管理器 uid=%lu\\n", uid);
+            ksu_set_manager_appid((uid_t)uid);
+        } else {
+            pr_info("KSU-A52: 管理器包名行解析失败\\n");
+        }
+        break;
+    }
+    kfree(buf);
+}
+
+"""
+FM_ANCHOR = """struct data_path {
+    char dirpath[DATA_PATH_LEN];
+"""
+pth = K / "manager" / "throne_tracker.c"
+if not pth.is_file():
+    report.append("[!] 找不到 manager/throne_tracker.c（无法兜底认领管理器）")
+else:
+    sth = read(pth)
+    if FM_MARK in sth:
+        report.append("[=] throne_tracker.c: 管理器兜底认领已存在（幂等）")
+    elif FM_ANCHOR not in sth:
+        report.append("[!] throne_tracker.c: 未找到 struct data_path 锚点 —— 上游结构变了")
+    else:
+        write(pth, sth.replace(FM_ANCHOR, FM_FUNC + FM_ANCHOR, 1))
+        report.append("[+] throne_tracker.c: 新增 ksu_force_crown_manager()（按包名兜底认领管理器）")
+
+# 在 on_post_fs_data() 里调用它，并把「管理器状态」打进内核日志，便于刷机后一条 dmesg 定位
+FM_CALL = """    ksu_load_allow_list();
+    ksu_dynamic_manager_load();
+    ksu_observer_init();"""
+FM_CALL_NEW = """    ksu_load_allow_list();
+    ksu_dynamic_manager_load();
+    /* """ + FM_MARK + """ */
+    ksu_force_crown_manager();
+    pr_info("KSU-A52: manager_appid=%d dynamic_enabled=%d\\n",
+            (int)ksu_get_manager_appid(), (int)ksu_manager_enabled());
+    ksu_observer_init();"""
+FM_DECL = """/* KSU-A52: 由 manager/throne_tracker.c 实现 */
+extern void ksu_force_crown_manager(void);
+"""
+if pks.is_file():
+    sk2 = read(pks)
+    if FM_MARK + " */\n    ksu_force_crown_manager();" in sk2:
+        report.append("[=] ksud.c: 兜底认领调用已存在（幂等）")
+    elif FM_CALL not in sk2:
+        report.append("[!] ksud.c: 未找到 on_post_fs_data 三连调用锚点 —— 上游结构变了")
+    else:
+        sk2 = sk2.replace(FM_CALL, FM_CALL_NEW, 1)
+        if "extern void ksu_force_crown_manager(void);" not in sk2:
+            sk2 = FM_DECL + sk2
+        write(pks, sk2)
+        report.append("[+] ksud.c: on_post_fs_data 调用 ksu_force_crown_manager() 并打印管理器状态")
+
+# 16) kernel/hook/lsm_hook.c —— SUSFS 分支补注册 LSM 的 task_fix_setuid
+#     4.19 既没有 kprobe 也没有 kernel/sys.c 的 setresuid 挂钩；而 lsm_hook.c 的
+#     ksu_hooks[] 在 CONFIG_KSU_SUSFS 下把 task_fix_setuid 整块 #ifndef 掉了，
+#     于是 ksu_handle_setresuid() 在 SUSFS 版里永远没人调用。后果：
+#       1. zygote 拉起管理器进程时不会 install fd for manager → 管理器拿不到 supercall fd
+#          → 界面「内核上未检测到 SukiSU 驱动程序」；
+#       2. 管理器的 seccomp 不会被 disable_seccomp() 解除。
+LSM_MARK = "KSU-A52: SUSFS 版注册 task_fix_setuid"
+plsm = K / "hook" / "lsm_hook.c"
+LSM_FUNC = """#ifdef CONFIG_KSU_SUSFS
+/* """ + LSM_MARK + """
+ *
+ * 4.19 既没有 kprobe 也没有 kernel/sys.c 的 setresuid 挂钩；而 lsm_hook.c 的
+ * ksu_hooks[] 在 CONFIG_KSU_SUSFS 下把 task_fix_setuid 整块 #ifndef 掉了，
+ * 于是 ksu_handle_setresuid() 在 SUSFS 版里永远没人调用。后果：
+ *   1. 管理器进程被 zygote 拉起来时拿不到 supercall fd → 界面「未检出驱动」；
+ *   2. 管理器的 seccomp 不会被 disable_seccomp() 解除。
+ * 这里补一个壳子，把 LSM 的 task_fix_setuid 转发给 SUSFS 分支已有的实现。
+ */
+static int ksu_task_fix_setuid_susfs(struct cred *new, const struct cred *old, int flags)
+{
+    if (unlikely(!new || !old))
+        return 0;
+    return ksu_handle_setresuid(new->uid.val, new->euid.val, new->suid.val);
+}
+#endif
+
+"""
+LSM_ANCHOR = "static struct security_hook_list ksu_hooks[] = {"
+LSM_OLD = """#ifndef CONFIG_KSU_SUSFS
+    LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
+#endif"""
+LSM_NEW = """#ifdef CONFIG_KSU_SUSFS
+    /* """ + LSM_MARK + """ */
+    LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid_susfs),
+#else
+    LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
+#endif"""
+if plsm.is_file():
+    sl = read(plsm)
+    if "ksu_task_fix_setuid_susfs" in sl:
+        report.append("[=] lsm_hook.c: SUSFS 版 task_fix_setuid 已注册（幂等）")
+    elif LSM_OLD not in sl:
+        report.append("[!] lsm_hook.c: 未找到 task_fix_setuid 注册块 —— 上游结构变了")
+    else:
+        sl = sl.replace(LSM_OLD, LSM_NEW, 1)
+        if LSM_ANCHOR in sl:
+            sl = sl.replace(LSM_ANCHOR, LSM_FUNC + LSM_ANCHOR, 1)
+        write(plsm, sl)
+        report.append("[+] lsm_hook.c: SUSFS 版注册 task_fix_setuid（管理器才能拿到 fd）")
+else:
+    report.append("[!] 找不到 hook/lsm_hook.c")
+
+
 # 17) 【管理器 fd 的最后一环】4.19 的 setresuid 里没有任何 KSU 挂钩
 #     SUSFS 版驱动把 setresuid 的处理放在 ksu_handle_setresuid()（hook/lsm_hook.c:132），
 #     官方 5.x 是在 kernel/sys.c 的 SYSCALL_DEFINE3(setresuid) 里调用它。
@@ -646,7 +814,20 @@ if psc.is_file() and SC_MARK in read(psc):
     ok = False
     print("[!] 致命：sucompat.c 仍是「ksud 钩子 + sucompat 并行」的坏改法")
     print("    → run 40495354659 实测该改法会让 init 的 execve ENOENT、无限重启")
-# 【第 17 组】管理器 fd 的最后一环
+# 【管理器识别】管理器只对 allowlist/管理器 uid 放行 su；appid 未被认领时就会「未检出驱动」
+if pth.is_file() and FM_MARK not in read(pth):
+    ok = False
+    print("[!] 致命：throne_tracker.c 缺少按包名兜底认领管理器")
+    print("    → 管理器（com.sukisu.ultra）的 su 不被放行，界面显示「未检到驱动」")
+if pks.is_file() and "ksu_force_crown_manager();" not in read(pks):
+    ok = False
+    print("[!] 致命：on_post_fs_data() 未调用 ksu_force_crown_manager()")
+# 【管理器 fd】SUSFS 版必须注册 task_fix_setuid，否则 ksu_handle_setresuid() 永不执行，
+#   管理器进程 spawn 时拿不到 supercall fd → 界面一直显示「未检测到驱动程序」
+if plsm.is_file() and "ksu_task_fix_setuid_susfs" not in read(plsm):
+    ok = False
+    print("[!] 致命：lsm_hook.c 的 SUSFS 分支没有注册 task_fix_setuid")
+    print("    → 管理器拿不到 supercall fd，界面会一直「内核上未检测到 SukiSU 驱动程序」")
 if plsm.is_file() and "ksu_a52_setresuid_glue" not in read(plsm):
     ok = False
     print("[!] 致命：lsm_hook.c 缺少 ksu_a52_setresuid_glue()")
