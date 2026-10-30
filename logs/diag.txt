@@ -1,6 +1,6 @@
 === BUILD_RC=0 ===
 --- RELEASE 标记 ---
-5282:RELEASE_OK kbuild-1029-152318
+5282:RELEASE_OK kbuild-1030-043150
 --- 关键错误扫描 ---
 /home/runner/out.txt:--- 链接缺口硬断言（run #2 的 4 个 undefined reference） ---
 --- reboot.c 挂钩（必须出现 ksu_handle_sys_reboot == 0）---
@@ -29,9 +29,9 @@ CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
 --- build.log 尾部 ---
 GAPs covered bytes len   : 0x200 (512 B)  
 
-integrity_crypto_addrs:  name: 'integrity_crypto_addrs', type: 'OBJECT', bind: 'GLOBAL', ndx: '3', visibility: 'DEFAULT', address: '0xffffff8009d9c3f8', size: '0x10000'
-crypto_buildtime_address:  name: 'crypto_buildtime_address', type: 'OBJECT', bind: 'GLOBAL', ndx: '3', visibility: 'DEFAULT', address: '0xffffff8009dac3f8', size: '0x8'
-HMAC for "crypto" module is: b'0a4f4400e22559635b1f04188afa2b64e98dc7a1bf9bc71240ccac882dbfa207'
+integrity_crypto_addrs:  name: 'integrity_crypto_addrs', type: 'OBJECT', bind: 'GLOBAL', ndx: '3', visibility: 'DEFAULT', address: '0xffffff8009d9c4f8', size: '0x10000'
+crypto_buildtime_address:  name: 'crypto_buildtime_address', type: 'OBJECT', bind: 'GLOBAL', ndx: '3', visibility: 'DEFAULT', address: '0xffffff8009dac4f8', size: '0x8'
+HMAC for "crypto" module is: b'f44d534de0f1b78efccb300ae1d9b5f4c40f268a82b72e2a49e94f0e0f341c66'
 FIPS integrity procedure has been finished for crypto
   OBJCOPY arch/arm64/boot/Image
   Building modules, stage 2.
