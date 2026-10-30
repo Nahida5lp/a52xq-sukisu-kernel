@@ -95,7 +95,7 @@ echo "=== [6.5/8] SUSFS：内核补丁 + v2 API 兼容层 ==="
 # 兼容层两文件随脚本分发：paste 直取，raw 作为兜底
 fetch() { curl -fsSL --max-time 90 -o "$1" "$2" && return 0; curl -fsSL --max-time 90 -o "$1" "$3"; }
 fetch "$W/scripts/apply_susfs_419.py" "https://paste.c-net.org/SkippyVacant" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/apply_susfs_419.py"
-fetch "$W/scripts/susfs_compat_419.c"  "https://paste.c-net.org/HappenSimple" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/susfs_compat_419.c"
+fetch "$W/scripts/susfs_compat_419.c"  "https://paste.c-net.org/GoatsBenji" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/susfs_compat_419.c"
 fetch "$W/scripts/fix_susfs_rejects.py" "https://paste.c-net.org/YogurtJumpsuit" "https://raw.githubusercontent.com/Nahida5lp/a52xq-sukisu-kernel/main/scripts/fix_susfs_rejects.py"
 SUSFS_DIR="$W/.susfs4ksu"
 rm -rf "$SUSFS_DIR"; mkdir -p "$SUSFS_DIR"
