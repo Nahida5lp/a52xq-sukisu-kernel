@@ -717,10 +717,34 @@ if psys.is_file():
 else:
     report.append("[=] 当前目录不是内核树，跳过 kernel/sys.c（测试时正常）")
 
+# 19) supercall/dispatch.c —— 给 SUSFS 命令分发加一条「cmd + arg」日志
+#     SuSFS 面板点击后设备卡死重启，但兼容层里连 "features enter" 都没打印，
+#     说明死在分发层（或调用到上游 v1.5.5 的处理函数）之前。加这条日志即可定位。
+pdisp = K / "supercall" / "dispatch.c"
+G19_MARK = "KSU-A52 susfs_dispatch"
+G19_OLD = "    if (magic2 == SUSFS_MAGIC && current_uid().val == 0) {\n"
+G19_NEW = (G19_OLD +
+           "        pr_info(\"KSU-A52 susfs_dispatch: cmd=0x%x arg=%px\\n\", cmd, arg);\n")
+if pdisp.is_file():
+    sdisp = read(pdisp)
+    if G19_MARK in sdisp:
+        report.append("[=] supercall/dispatch.c: susfs_dispatch 日志已存在（幂等）")
+    elif G19_OLD in sdisp:
+        write(pdisp, sdisp.replace(G19_OLD, G19_NEW, 1))
+        report.append("[+] supercall/dispatch.c: SUSFS 分发新增 cmd/arg 日志")
+    else:
+        report.append("[!] supercall/dispatch.c: 未找到 SUSFS 分发入口 —— 上游结构变了")
+else:
+    report.append("[=] 当前目录没有 supercall/dispatch.c（测试时正常）")
+
 print("\n".join(report))
 
 # ---- 自检 ----
 ok = True
+disp = K / "supercall" / "dispatch.c"
+if disp.is_file() and "KSU-A52 susfs_dispatch" not in read(disp):
+    ok = False
+    print("[!] 致命：dispatch.c 的 SUSFS 分发日志未生效（无法定位 SuSFS 崩溃）")
 if OLD1 in read(K / "include" / "uapi" / "feature.h"):
     ok = False
     print("[!] feature.h 的 guard 仍然存在")

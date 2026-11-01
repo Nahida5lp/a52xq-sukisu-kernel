@@ -1,4 +1,4 @@
-=== publish 自查报告 Sun Nov  1 07:37:52 UTC 2026 ===
+=== publish 自查报告 Sun Nov  1 10:30:36 UTC 2026 ===
 --- README/LICENSE 大小 ---
 25241 README.md
 18093 LICENSE
@@ -6,14 +6,14 @@
 --- scripts / patches ---
 patches:
 total 8
--rw-r--r-- 1 runner runner 4740 Nov  1 07:37 ksu_hooks_sukisu_4.19.patch
+-rw-r--r-- 1 runner runner 4740 Nov  1 10:30 ksu_hooks_sukisu_4.19.patch
 
 scripts:
-total 156
--rwxr-xr-x 1 runner runner 96659 Nov  1 07:37 build_builtin.sh
--rw-r--r-- 1 runner runner 41853 Nov  1 07:37 fix_driver_419.py
--rw-r--r-- 1 runner runner  8430 Nov  1 07:37 fix_sources_for_419.py
--rw-r--r-- 1 runner runner  4080 Nov  1 07:37 strip_legacy_ksu_hooks.py
+total 160
+-rwxr-xr-x 1 runner runner 98423 Nov  1 10:30 build_builtin.sh
+-rw-r--r-- 1 runner runner 43176 Nov  1 10:30 fix_driver_419.py
+-rw-r--r-- 1 runner runner  8430 Nov  1 10:30 fix_sources_for_419.py
+-rw-r--r-- 1 runner runner  4080 Nov  1 10:30 strip_legacy_ksu_hooks.py
 --- 工作流 ---
 build-kernel.yml
 build-susfs-fixed.yml
@@ -41,4 +41,4 @@ build.yml
 ./scripts/fix_sources_for_419.py
 ./scripts/strip_legacy_ksu_hooks.py
 --- Release ---
-a52xq SukiSU Ultra v4.2.1-r1 builtin UAPI6 (kbuild-1028-115719)		kbuild-1028-115719	2026-10-28T11:57:22Z
+a52xq SukiSU Ultra v4.2.1-r1 builtin UAPI6 (kbuild-1101-075333)	Latest	kbuild-1101-075333	2026-11-01T07:53:35Z
