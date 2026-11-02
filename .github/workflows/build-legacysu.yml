@@ -1,0 +1,169 @@
+name: build-legacysu-module
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build LegacySU xposed module
+        run: |
+          set -euo pipefail
+          W=$PWD/mod
+          mkdir -p "$W/out" "$W/assets"
+          mkdir -p $(dirname $W/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java)
+          cat > $W/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java <<'XXEOFXX'
+          package de.robv.android.xposed;
+          public interface IXposedHookLoadPackage {
+              void handleLoadPackage(LoadPackageParam lpparam) throws Throwable;
+              class LoadPackageParam {
+                  public String packageName;
+                  public String processName;
+                  public boolean isFirstApplication;
+                  public ClassLoader classLoader;
+              }
+          }
+          XXEOFXX
+          mkdir -p $(dirname $W/stubs/de/robv/android/xposed/XC_MethodHook.java)
+          cat > $W/stubs/de/robv/android/xposed/XC_MethodHook.java <<'XXEOFXX'
+          package de.robv.android.xposed;
+          public abstract class XC_MethodHook {
+              protected void beforeHookedMethod(MethodHookParam param) throws Throwable {}
+              protected void afterHookedMethod(MethodHookParam param) throws Throwable {}
+              public static class MethodHookParam {
+                  public Object thisObject;
+                  public Object[] args;
+                  private Object result;
+                  private Throwable throwable;
+                  public Object getResult() { return result; }
+                  public void setResult(Object r) { result = r; throwable = null; }
+                  public Throwable getThrowable() { return throwable; }
+                  public void setThrowable(Throwable t) { throwable = t; }
+              }
+              public static class Unhook {}
+          }
+          XXEOFXX
+          mkdir -p $(dirname $W/stubs/de/robv/android/xposed/XposedBridge.java)
+          cat > $W/stubs/de/robv/android/xposed/XposedBridge.java <<'XXEOFXX'
+          package de.robv.android.xposed;
+          public final class XposedBridge {
+              public static void log(String text) { android.util.Log.i("LegacySU", text); }
+              public static void log(Throwable t) { android.util.Log.e("LegacySU", "err", t); }
+          }
+          XXEOFXX
+          mkdir -p $(dirname $W/stubs/de/robv/android/xposed/XposedHelpers.java)
+          cat > $W/stubs/de/robv/android/xposed/XposedHelpers.java <<'XXEOFXX'
+          package de.robv.android.xposed;
+          public final class XposedHelpers {
+              public static XC_MethodHook.Unhook findAndHookMethod(Class<?> clazz, String methodName,
+                      Object... parameterTypesAndCallback) {
+                  throw new UnsupportedOperationException("stub");
+              }
+          }
+          XXEOFXX
+          mkdir -p $(dirname $W/src/com/nahida/legacysu/XposedMod.java)
+          cat > $W/src/com/nahida/legacysu/XposedMod.java <<'XXEOFXX'
+          package com.nahida.legacysu;
+          
+          import de.robv.android.xposed.IXposedHookLoadPackage;
+          import de.robv.android.xposed.IXposedHookLoadPackage.LoadPackageParam;
+          import de.robv.android.xposed.XC_MethodHook;
+          import de.robv.android.xposed.XposedBridge;
+          import de.robv.android.xposed.XposedHelpers;
+          
+          import java.io.File;
+          import java.util.Arrays;
+          import java.util.HashSet;
+          import java.util.Set;
+          
+          public class XposedMod implements IXposedHookLoadPackage {
+              private static final String TAG = "LegacySU";
+              private static final String TARGET = "make.more.r2d2.play.cellular_pro";
+              private static final Set<String> FAKE = new HashSet<String>(Arrays.asList(
+                      "/system/xbin/su",
+                      "/system/app/Superuser.apk",
+                      "/system/sbin/su",
+                      "/sbin/su",
+                      "/xbin/su"));
+          
+              @Override
+              public void handleLoadPackage(LoadPackageParam lp) throws Throwable {
+                  if (lp == null || lp.packageName == null) return;
+                  if (!lp.packageName.equals(TARGET)) return;
+                  XposedBridge.log(TAG + ": active in " + lp.packageName);
+                  hookBool("exists", Boolean.TRUE);
+                  hookBool("isFile", Boolean.TRUE);
+                  hookBool("canExecute", Boolean.TRUE);
+                  hookLong("length", 4096L);
+              }
+          
+              private static String pathOf(Object o) {
+                  if (!(o instanceof File)) return null;
+                  try { return ((File) o).getPath(); } catch (Throwable t) { return null; }
+              }
+          
+              private static void hookBool(String m, final Boolean v) {
+                  try {
+                      XposedHelpers.findAndHookMethod(File.class, m, new XC_MethodHook() {
+                          @Override protected void afterHookedMethod(MethodHookParam p) {
+                              String s = pathOf(p.thisObject);
+                              if (s != null && FAKE.contains(s)) p.setResult(v);
+                          }
+                      });
+                  } catch (Throwable t) { XposedBridge.log(TAG + ": hook " + m + " failed: " + t); }
+              }
+          
+              private static void hookLong(String m, final Long v) {
+                  try {
+                      XposedHelpers.findAndHookMethod(File.class, m, new XC_MethodHook() {
+                          @Override protected void afterHookedMethod(MethodHookParam p) {
+                              String s = pathOf(p.thisObject);
+                              if (s != null && FAKE.contains(s)) p.setResult(v);
+                          }
+                      });
+                  } catch (Throwable t) { XposedBridge.log(TAG + ": hook " + m + " failed: " + t); }
+              }
+          }
+          XXEOFXX
+          mkdir -p $(dirname $W/AndroidManifest.xml)
+          cat > $W/AndroidManifest.xml <<'XXEOFXX'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.nahida.legacysu">
+              <application android:label="LegacySU" android:hasCode="true">
+                  <meta-data android:name="xposedmodule" android:value="true" />
+                  <meta-data android:name="xposeddescription"
+                      android:value="只对目标 App 伪造 /system/xbin/su 等老式 root 路径的存在性；不修改系统分区，对其它 App 不可见。" />
+                  <meta-data android:name="xposedminversion" android:value="93" />
+              </application>
+          </manifest>
+          XXEOFXX
+          printf 'com.nahida.legacysu.XposedMod' > $W/assets/xposed_init
+          mkdir -p "$W/out/classes" "$W/out/dex"
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          BT=$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)
+          PLAT=$(ls -d "$SDK"/platforms/android-* | sort -V | tail -1)/android.jar
+          echo "build-tools: $BT"; echo "platform: $PLAT"
+          javac -source 8 -target 8 -Xlint:-options -bootclasspath "$PLAT" -cp "$PLAT" -d "$W/out/classes" $(find "$W/stubs" "$W/src" -name '*.java')
+          "$BT/d8" --lib "$PLAT" --min-api 26 --output "$W/out/dex" $(find "$W/out/classes" -name '*.class')
+          "$BT/aapt2" link -o "$W/out/base.apk" --manifest "$W/AndroidManifest.xml" -I "$PLAT" -A "$W/assets" --min-sdk-version 26 --target-sdk-version 34 --version-code 1 --version-name 1.0
+          (cd "$W/out/dex" && zip -q -u ../base.apk classes.dex)
+          "$BT/zipalign" -f -p 4 "$W/out/base.apk" "$W/out/aligned.apk"
+          keytool -genkeypair -keystore "$W/out/ks.jks" -alias k -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=LegacySU,O=A52xq,C=CN" >/dev/null 2>&1
+          "$BT/apksigner" sign --ks "$W/out/ks.jks" --ks-pass pass:android --key-pass pass:android --out "$W/out/LegacySU-module.apk" "$W/out/aligned.apk"
+          "$BT/apksigner" verify --print-certs "$W/out/LegacySU-module.apk" | head -5
+          ls -l "$W/out/LegacySU-module.apk"
+          "$BT/aapt2" dump badging "$W/out/LegacySU-module.apk" | head -3
+      - name: Publish release
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="legacysu-$(date -u +%m%d-%H%M%S)"
+          gh release create "$TAG" mod/out/LegacySU-module.apk -t "LegacySU module $TAG" -n "只对 make.more.r2d2.play.cellular_pro 伪造老式 root 路径。" || true
