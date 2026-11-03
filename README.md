@@ -518,3 +518,52 @@ Therefore flashing **only the `boot` partition** and enabling/disabling modules
 
 Flash only the `boot` partition (AnyKernel3) — no data wipe, activation preserved.
 Run `Actions → build.yml` to build in the cloud (~20 min).
+---
+
+## 2026-11 更新：内核内置 SUSFS v1.5.5（4.19 移植）
+
+### 新增能力
+
+| 能力 | 状态 | 说明 |
+| --- | --- | --- |
+| SUSFS 基础 | ✅ | `susfs is initialized! version: v1.5.5`，`内核类型 Non-GKI`、`实现方式 Built-in` |
+| SuSFS 面板 | ✅ | 管理器「设置 → 拓展功能 → SuSFS」可正常打开，不再崩溃重启 |
+| sus_path / sus_kstat | ✅ | `ksud susfs` 全套子命令可用（add-sus-path / add-sus-kstat / add-open-redirect …） |
+| 隐藏 KSU/SUSFS 符号 | ✅ | `/proc/kallsyms` 中 `ksu_` 符号 0 条 |
+| AVC 日志伪装 / 清理残留 | ✅ | 配置开关，开机自动执行 |
+| Bootloader 属性伪装 | ✅ | `ro.boot.verifiedbootstate=green`、`flash.locked=1`、`warranty_bit=0`、`ro.debuggable=0` |
+| 版本伪装（uname / build_time） | ⚠ 不建议开 | SUSFS 只改 `uname()` 系统调用，`/proc/version` 仍是真值，反而制造不一致 |
+
+### 为 4.19 补的 5 处适配（上游 SUSFS 只覆盖 5.10+）
+
+1. **`feature/sucompat.c`**：SUSFS 分支用 `struct filename **`，而 4.19 的 `fs/open.c` / `fs/stat.c` 传 `const char __user **` → 按钩子分组做版本守卫（否则 `pc : ksu_handle_faccessat` Oops）
+2. **`feature/sulog/event.c`**：SUSFS 分支的 sulog 捕获函数签名不一致 → 版本守卫
+3. **`feature/adb_root.c`**：SUSFS 分支缺 `ksu_adb_root_handle_execve_manual` 定义 → 版本守卫（否则 undefined reference）
+4. **`kernel/reboot.c`**：必须注入 `ksu_handle_sys_reboot`，且**返回 0 才表示「已处理」**（判断写反会让 init 的 reboot 直接返回，init 退出触发 `!CONFIG_PID_NS` 的 `BUG()` → 无限重启）
+5. **`susfs_get_enabled_features`**：SUSFS 用 `strchr` 逐字节写字符串字面量，4.19 上落在只读段 → `Internal error: Oops 96000045`（`pc : susfs_get_enabled_features`）；改为数组字面量 + 单次 `copy_to_user` 后彻底消失
+
+### 刷写 / 回滚
+
+- **刷入**：TWRP → 安装 `a52xq-sukisu-SUSFS-*.zip`（AnyKernel3，只写 `boot` 分区，不动 data / super）
+- **回滚**：刷入此前备份的 boot 镜像（Odin 必须用 `.tar.md5`，否则报 `SHA256 is invalid`），或 TWRP 恢复 boot
+- ⚠ **不要**把裸 `Image` dd 到 boot 分区偏移 0 —— 会破坏 AOSP boot header（`ANDROID!` + 内核在 offset 4096），本次踩过，直接进下载模式
+
+---
+
+## 隐藏与密钥认证（模块层，不属于内核）
+
+| 组件 | 作用 | 备注 |
+| --- | --- | --- |
+| TrickyStore 1.4.1 | 提供 keybox，让密钥认证显示「已锁定」 | 需 `target.txt` 列出目标包名 |
+| a52xq_attest_props | 开机注入 `ro.boot.*` / fingerprint / model | post-fs-data 阶段执行 |
+| Zygisk Next 1.5.2 | Zygisk 注入宿主 | 依赖内核 root 状态正确 |
+| PlayIntegrityFix v18 | 基础完整性修复 | 与 HMA 同开会触发 `APP_UID_MISMATCH (-7)` |
+| HMA-OSS | 隐藏应用列表 | 与 PIF 二选一，同开会冲突 |
+| a52xq_cacert | 系统级 CA（抓包用） | 需手动信任 |
+
+### 已知限制
+
+- **Play Integrity `MEETS_STRONG_INTEGRITY`**：解锁 bootloader 后拿不到硬件级证明，无法通过（这是设计使然，非本项目缺陷）
+- **密钥认证两种模式**：应用自身 uid → 显示「已锁定」（keybox 生效）；Shizuku / uid 2000 → 显示「已解锁」+ Google 真链（uid 2000 不在 TrickyStore 目标内，属预期）
+- **Momo**：「Bootloader 未锁定」已消除；「已开启调试模式」需关闭 USB 调试才会消失
+- **Vector 框架**：把 `de.robv.android.xposed.*` 类名随机化（如 `sUL.Lamjo.L…`），手写 Xposed 模块会抛 `AbstractMethodError`，需要 LSPosed 这类经典 API 框架
