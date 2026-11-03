@@ -150,7 +150,9 @@ jobs:
           BT=$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)
           PLAT=$(ls -d "$SDK"/platforms/android-* | sort -V | tail -1)/android.jar
           echo "build-tools: $BT"; echo "platform: $PLAT"
-          javac -source 8 -target 8 -Xlint:-options -bootclasspath "$PLAT" -cp "$PLAT" -d "$W/out/classes" $(find "$W/stubs" "$W/src" -name '*.java')
+          javac -source 8 -target 8 -Xlint:-options -bootclasspath "$PLAT" -d "$W/out/stubcls" $(find "$W/stubs" -name '*.java')
+          javac -source 8 -target 8 -Xlint:-options -bootclasspath "$PLAT" -cp "$W/out/stubcls" -d "$W/out/classes" $(find "$W/src" -name '*.java')
+          echo "=== classes in APK dex (must not contain de/robv) ==="; find "$W/out/classes" -name '*.class' | sed "s|$W/out/classes/||"
           "$BT/d8" --lib "$PLAT" --min-api 26 --output "$W/out/dex" $(find "$W/out/classes" -name '*.class')
           "$BT/aapt2" link -o "$W/out/base.apk" --manifest "$W/AndroidManifest.xml" -I "$PLAT" -A "$W/assets" --min-sdk-version 26 --target-sdk-version 34 --version-code 1 --version-name 1.0
           (cd "$W/out/dex" && zip -q -u ../base.apk classes.dex)
