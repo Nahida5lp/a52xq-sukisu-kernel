@@ -34,7 +34,6 @@ jobs:
           package de.robv.android.xposed;
           public interface IXposedHookLoadPackage {
               void handleLoadPackage(de.robv.android.xposed.XC_LoadPackage.LoadPackageParam lpparam) throws Throwable;
-              class LoadPackageParam extends XC_LoadPackage.LoadPackageParam {}
           }
           XXEOFXX
           mkdir -p $(dirname $W/stubs/de/robv/android/xposed/XC_MethodHook.java)
@@ -100,7 +99,7 @@ jobs:
                       "/xbin/su"));
           
               @Override
-              public void handleLoadPackage(LoadPackageParam lp) throws Throwable {
+              public void handleLoadPackage(de.robv.android.xposed.XC_LoadPackage.LoadPackageParam lp) throws Throwable {
                   if (lp == null || lp.packageName == null) return;
                   if (!lp.packageName.equals(TARGET)) return;
                   XposedBridge.log(TAG + ": active in " + lp.packageName);
