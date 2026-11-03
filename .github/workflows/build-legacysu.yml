@@ -33,7 +33,7 @@ jobs:
           cat > $W/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java <<'XXEOFXX'
           package de.robv.android.xposed;
           public interface IXposedHookLoadPackage {
-              void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable;
+              void handleLoadPackage(de.robv.android.xposed.XC_LoadPackage.LoadPackageParam lpparam) throws Throwable;
               class LoadPackageParam extends XC_LoadPackage.LoadPackageParam {}
           }
           XXEOFXX
