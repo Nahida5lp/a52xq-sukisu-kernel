@@ -17,17 +17,24 @@ jobs:
           set -euo pipefail
           W=$PWD/mod
           mkdir -p "$W/out" "$W/assets"
-          mkdir -p $(dirname $W/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java)
-          cat > $W/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java <<'XXEOFXX'
+          mkdir -p $(dirname $W/stubs/de/robv/android/xposed/XC_LoadPackage.java)
+          cat > $W/stubs/de/robv/android/xposed/XC_LoadPackage.java <<'XXEOFXX'
           package de.robv.android.xposed;
-          public interface IXposedHookLoadPackage {
-              void handleLoadPackage(LoadPackageParam lpparam) throws Throwable;
-              class LoadPackageParam {
+          public final class XC_LoadPackage {
+              public static class LoadPackageParam {
                   public String packageName;
                   public String processName;
                   public boolean isFirstApplication;
                   public ClassLoader classLoader;
               }
+          }
+          XXEOFXX
+          mkdir -p $(dirname $W/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java)
+          cat > $W/stubs/de/robv/android/xposed/IXposedHookLoadPackage.java <<'XXEOFXX'
+          package de.robv.android.xposed;
+          public interface IXposedHookLoadPackage {
+              void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable;
+              class LoadPackageParam extends XC_LoadPackage.LoadPackageParam {}
           }
           XXEOFXX
           mkdir -p $(dirname $W/stubs/de/robv/android/xposed/XC_MethodHook.java)
@@ -72,7 +79,7 @@ jobs:
           package com.nahida.legacysu;
           
           import de.robv.android.xposed.IXposedHookLoadPackage;
-          import de.robv.android.xposed.IXposedHookLoadPackage.LoadPackageParam;
+          import de.robv.android.xposed.XC_LoadPackage.LoadPackageParam;
           import de.robv.android.xposed.XC_MethodHook;
           import de.robv.android.xposed.XposedBridge;
           import de.robv.android.xposed.XposedHelpers;
